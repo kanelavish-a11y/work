@@ -1,11 +1,4 @@
-# DISA Workforce Analytics Dashboard
-## Complete Implementation Guide
 
-**Version:** 1.0
-**Last Updated:** October 2025
-**Author:** Implementation Team
-
----
 
 ## Table of Contents
 
@@ -26,7 +19,7 @@
 
 ### 1.1 Project Overview
 
-The DISA Workforce Analytics Dashboard provides comprehensive workforce analytics focusing on attrition and retention patterns. This implementation follows a phased approach:
+Workforce Analytics Dashboard provides comprehensive workforce analytics focusing on attrition and retention patterns. This implementation follows a phased approach:
 
 - **Phase 1:** Core attrition and retention analysis (19 measures)
 - **Phase 2:** High-level analytics including demographics, trending, movement patterns, and predictive insights (45 measures)
@@ -78,7 +71,7 @@ Your semantic model contains 5 primary tables:
   - `Occ Series Current` - Occupation series
   - `Year` - Snapshot year
 
-#### **KW DISA Personnel Actions Table**
+#### **KW Personnel Actions Table**
 - **Purpose:** Personnel action records (hires, losses, movements)
 - **Key Fields:**
   - `EFFECTIVE_DATE_4` - Effective date of action
