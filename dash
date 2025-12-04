@@ -1,388 +1,1427 @@
-Below is a consolidated implementation that includes all of the Power Query M code for your key tables (Snapshots, Org Mapping, Personnel Actions and Date) followed by DAX measures for attrition, retention and the advanced statistics. You can paste each section into the Advanced Editor of its respective query in Power BI Desktop and then define the DAX measures in the model.
+/// ============================================================
+/// DISA ATTRITION & RETENTION - COMPLETE DAX MEASURES
+/// TMDL Format for Power BI
+/// ============================================================
 
-⸻
+table _Measures
+	lineageTag: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
-✅ Power Query M Code
+	/// ========================================================
+	/// GROUP 1: PERIOD SELECTION MEASURES
+	/// ========================================================
 
-1. Snapshots query (appends all quarterly snapshot files)
+	measure 'Selected Period Start' = 
+		SELECTEDVALUE(DimPeriodStart[PeriodStartDate], BLANK())
+		formatString: Short Date
+		lineageTag: 00000001-0001-0001-0001-000000000001
 
-let
-    // Connect to the folder containing all snapshot files
-    Source = Folder.Files("C:\\Data\\DISA_Snapshots"),
-    Filtered = Table.SelectRows(Source, each Text.StartsWith([Name], "DISA Empl Data")),
+	measure 'Selected Period End' = 
+		SELECTEDVALUE(DimPeriodEnd[PeriodEndDate], BLANK())
+		formatString: Short Date
+		lineageTag: 00000001-0001-0001-0001-000000000002
 
-    // Extract snapshot date from file name "DISA Empl Data dd Mmm yy.xlsx"
-    AddSnapshotDate = Table.AddColumn(Filtered, "SnapshotDate", each
-        let
-            DateString = Text.Trim(Text.Middle([Name], 15, 9)), // "01 Oct 24"
-            DayPart   = Text.Start(DateString, 2),
-            MonthPart = Text.Middle(DateString, 3, 3),
-            YearPart  = Text.End(DateString, 2),
-            ParsedDate = Date.FromText(DayPart & " " & MonthPart & " 20" & YearPart)
-        in
-            ParsedDate
-    ),
+	measure 'Period Start Label' = 
+		VAR StartDate = [Selected Period Start]
+		RETURN
+		IF(
+			ISBLANK(StartDate),
+			"Select Period Start",
+			FORMAT(StartDate, "dd MMM yyyy")
+		)
+		lineageTag: 00000001-0001-0001-0001-000000000003
 
-    // Expand each workbook into a unified table
-    AddWorkbook = Table.AddColumn(AddSnapshotDate, "Data", each Excel.Workbook([Content], true)),
-    ExpandWB = Table.ExpandTableColumn(AddWorkbook, "Data", {"Data"}, {"Data"}),
-    ExpandSheet = Table.ExpandTableColumn(ExpandWB, "Data", {"Data"}, {"SheetData"}),
-    ExpandRows = Table.ExpandTableColumn(ExpandSheet, "SheetData", Table.ColumnNames(ExpandSheet{0}[SheetData])),
+	measure 'Period End Label' = 
+		VAR EndDate = [Selected Period End]
+		RETURN
+		IF(
+			ISBLANK(EndDate),
+			"Select Period End",
+			FORMAT(EndDate, "dd MMM yyyy")
+		)
+		lineageTag: 00000001-0001-0001-0001-000000000004
 
-    // Cast important fields
-    ChangedTypes = Table.TransformColumnTypes(
-        ExpandRows,
-        {
-            {"DoD ID (EDIPI)", type text},
-            {"Org Structure ID", type text},
-            {"Title", type text},
-            {"Occ Series Current", type text},
-            {"Manpower PCN", type text},
-            {"ServiceStartDate", type date},     // adjust to your actual column names
-            {"DateOfBirth", type date}           // adjust to your actual column names
-        }
-    ),
+	measure 'Days in Period' = 
+		VAR StartDate = [Selected Period Start]
+		VAR EndDate = [Selected Period End]
+		RETURN
+		IF(
+			ISBLANK(StartDate) || ISBLANK(EndDate),
+			BLANK(),
+			DATEDIFF(StartDate, EndDate, DAY)
+		)
+		formatString: #,##0
+		lineageTag: 00000001-0001-0001-0001-000000000005
 
-    // Derive the two‑character org code
-    AddOrgFirst2 = Table.AddColumn(ChangedTypes, "OrgFirst2", each Text.Start([Org Structure ID], 2), type text),
+	measure 'Selection Status' = 
+		VAR StartDate = [Selected Period Start]
+		VAR EndDate = [Selected Period End]
+		RETURN
+		SWITCH(
+			TRUE(),
+			ISBLANK(StartDate) && ISBLANK(EndDate), "⚠️ Select both dates",
+			ISBLANK(StartDate), "⚠️ Select Period Start",
+			ISBLANK(EndDate), "⚠️ Select Period End",
+			StartDate = EndDate, "⚠️ Same date selected",
+			StartDate > EndDate, "⚠️ Start date is after End date",
+			"✓ Valid"
+		)
+		lineageTag: 00000001-0001-0001-0001-000000000006
 
-    // Merge in org hierarchy from DimOrg
-    MergedOrg = Table.NestedJoin(AddOrgFirst2, {"OrgFirst2"}, DimOrg, {"Org"}, "OrgDetails", JoinKind.LeftOuter),
-    ExpandedOrg = Table.ExpandTableColumn(MergedOrg, "OrgDetails", {"Center","Org Code","CAM ID"}, {"Center","Org Code","CAM ID"}),
+	measure 'Is Valid Selection' = 
+		VAR StartDate = [Selected Period Start]
+		VAR EndDate = [Selected Period End]
+		RETURN
+		IF(
+			NOT(ISBLANK(StartDate)) && 
+			NOT(ISBLANK(EndDate)) && 
+			StartDate < EndDate,
+			1,
+			0
+		)
+		formatString: 0
+		lineageTag: 00000001-0001-0001-0001-000000000007
 
-    // Flag students/interns
-    AddStudentIntern = Table.AddColumn(
-        ExpandedOrg,
-        "StudentIntern",
-        each
-            let
-                titleCheck = Text.Contains(Text.Lower([Title]), "student"),
-                seriesCheck = Text.EndsWith(Text.From([Occ Series Current]), "99"),
-                pcn = [Manpower PCN]
-            in
-                if (titleCheck or seriesCheck) and not (Text.Contains(pcn, "RG") or Text.Contains(pcn, "VT"))
-                then 1 else 0,
-        Int64.Type
-    ),
-
-    // Tenure (years) and age (years)
-    AddTenure = Table.AddColumn(
-        AddStudentIntern,
-        "TenureYears",
-        each Number.RoundDown(Duration.Days([SnapshotDate] - [ServiceStartDate]) / 365, 2),
-        type number
-    ),
-    AddAge = Table.AddColumn(
-        AddTenure,
-        "AgeYears",
-        each Number.RoundDown(Duration.Days([SnapshotDate] - [DateOfBirth]) / 365, 2),
-        type number
-    ),
-
-    // Tenure and age brackets
-    AddTenureBracket = Table.AddColumn(
-        AddAge,
-        "TenureBracket",
-        each
-            if [TenureYears] < 1 then "<1 year"
-            else if [TenureYears] < 3 then "1–2 years"
-            else if [TenureYears] < 5 then "3–4 years"
-            else if [TenureYears] < 10 then "5–9 years"
-            else "10+ years",
-        type text
-    ),
-    AddAgeBracket = Table.AddColumn(
-        AddTenureBracket,
-        "AgeBracket",
-        each
-            if [AgeYears] < 25 then "Under 25"
-            else if [AgeYears] <= 35 then "25–35"
-            else if [AgeYears] <= 50 then "36–50"
-            else "50+",
-        type text
-    ),
-
-    // Flag new hires (joined within 2 years of first snapshot date)
-    EarliestSnapshotDate = #date(2024,10,1), // change to your earliest snapshot
-    AddNewHireFlag = Table.AddColumn(
-        AddAgeBracket,
-        "NewHireFlag",
-        each if [ServiceStartDate] >= Date.AddYears(EarliestSnapshotDate, -2) then 1 else 0,
-        Int64.Type
-    )
-
-in
-    AddNewHireFlag
-
-2. DimOrg query (organisation mapping)
-
-let
-    Source = Excel.Workbook(File.Contents("C:\\Data\\OrgMAPPING.xlsx"), true),
-    Sheet  = Source{[Item="Sheet1",Kind="Sheet"]}[Data],
-    PromotedHeaders = Table.PromoteHeaders(Sheet, [PromoteAllScalars=true]),
-    Types = Table.TransformColumnTypes(
-        PromotedHeaders,
-        {
-            {"Org", type text},
-            {"Center", type text},
-            {"Org Code", type text},
-            {"CAM ID", type text}
-        }
-    )
-in
-    Types
-
-3. PersonnelActions query (fact table for losses and moves)
-
-let
-    Source = Excel.Workbook(File.Contents("C:\\Data\\KW DISA Personnel Actions new.xlsx"), true),
-    Sheet  = Source{[Item="Sheet1",Kind="Sheet"]}[Data],
-    PromotedHeaders = Table.PromoteHeaders(Sheet, [PromoteAllScalars=true]),
-
-    // Trim two‑character org codes from the long lines
-    AddFromOrgTrim = Table.AddColumn(
-        PromotedHeaders,
-        "FromOrgTrim",
-        each Text.Start(Text.Trim(Text.AfterDelimiter([FROM_POSITION_ORG_LINE6_14], "-", 0)), 2),
-        type text
-    ),
-    AddToOrgTrim = Table.AddColumn(
-        AddFromOrgTrim,
-        "ToOrgTrim",
-        each Text.Start(Text.Trim(Text.AfterDelimiter([TO_POSITION_ORG_LINE6_22], "-", 0)), 2),
-        type text
-    ),
-
-    // Set date types
-    ChangedTypes = Table.TransformColumnTypes(
-        AddToOrgTrim,
-        {
-            {"EFFECTIVE_DATE_4", type date},
-            {"DT_ARR_SVCG_CCPO", type date},
-            {"FIRST_NOA_CODE_5A", type text},
-            {"FIRST_NOA_DESC_5B", type text},
-            {"FIRST_ACTION_LA_CODE2_5E", type text},
-            {"FROM_OCC_CODE_9", type text},
-            {"TO_OCC_CODE_17", type text}
-            // add other columns here…
-        }
-    ),
-
-    // 1. Flag organisation change or external departure
-    AddFromToDifferent = Table.AddColumn(
-        ChangedTypes,
-        "FromToDifferent",
-        each
-            if
-                Text.Start([FROM_POSITION_ORG_LINE6_14], 2) <> Text.Start([TO_POSITION_ORG_LINE6_22], 2)
-                or List.Contains({"CAO", "T352"}, [FIRST_NOA_CODE_5A])
-                or Text.Start([FIRST_NOA_CODE_5A], 1) = "3"
-            then 1 else 0,
-        Int64.Type
-    ),
-
-    // 2. Flag job series change
-    AddSeriesChange = Table.AddColumn(
-        AddFromToDifferent,
-        "SeriesChange",
-        each
-            if
-                [FROM_OCC_CODE_9] <> [TO_OCC_CODE_17]
-                or List.Contains({"CAO", "T352"}, [FIRST_NOA_CODE_5A])
-                or Text.Start([FIRST_NOA_CODE_5A], 1) = "3"
-            then 1 else 0,
-        Int64.Type
-    ),
-
-    // 3. Classify movement type
-    AddMovementType = Table.AddColumn(
-        AddSeriesChange,
-        "MovementType",
-        each
-            if Text.Start([FIRST_NOA_CODE_5A], 1) = "3" or List.Contains({"CAO", "T352"}, [FIRST_NOA_CODE_5A]) then "External"
-            else if List.Contains({"501","570","702","721"}, [FIRST_NOA_CODE_5A]) then "Internal"
-            else "Other",
-        type text
-    ),
-
-    // 4. Derive departure reason
-    AddDepartureReason = Table.AddColumn(
-        AddMovementType,
-        "DepartureReason",
-        each
-            let lac2 = [FIRST_ACTION_LA_CODE2_5E]
-            in
-                if lac2 = "ADR" then "DoD‑DRP2"
-                else if lac2 = "RZM" then "DoD‑DRP1"
-                else if lac2 = "AZM" then "VERA/VSIP"
-                else [FIRST_NOA_DESC_5B],
-        type text
-    ),
-
-    // Optional numeric flag for external departures
-    AddExternalFlag = Table.AddColumn(
-        AddDepartureReason,
-        "ExternalFlag",
-        each if [MovementType] = "External" then 1 else 0,
-        Int64.Type
-    )
-
-in
-    AddExternalFlag
-
-4. DimDate query (date dimension)
-
-let
-    StartDate = #date(2020, 1, 1),
-    EndDate   = Date.EndOfYear(DateTime.Date(DateTime.LocalNow())),
-
-    Dates = List.Dates(StartDate, Duration.Days(EndDate - StartDate) + 1, #duration(1, 0, 0, 0)),
-    DateTable = Table.FromList(Dates, Splitter.SplitByNothing(), {"Date"}),
-    AddYear   = Table.AddColumn(DateTable, "Year", each Date.Year([Date]), Int64.Type),
-    AddMonthNum = Table.AddColumn(AddYear, "MonthNumber", each Date.Month([Date]), Int64.Type),
-    AddMonthName = Table.AddColumn(AddMonthNum, "MonthName", each Date.ToText([Date], "MMM"), type text),
-    AddQuarter = Table.AddColumn(AddMonthName, "Quarter", each Date.QuarterOfYear([Date]), Int64.Type)
-in
-    AddQuarter
+	measure 'Period Description' = 
+		VAR StartLabel = [Period Start Label]
+		VAR EndLabel = [Period End Label]
+		VAR DaysCount = [Days in Period]
+		RETURN
+		IF(
+			[Is Valid Selection] = 1,
+			StartLabel & " to " & EndLabel & " (" & FORMAT(DaysCount, "#,##0") & " days)",
+			"Invalid Selection"
+		)
+		lineageTag: 00000001-0001-0001-0001-000000000008
 
 
-⸻
+	/// ========================================================
+	/// GROUP 2: BASE HEADCOUNT MEASURES
+	/// ========================================================
 
-✅ DAX Measures
+	measure 'Headcount Period Start' = 
+		VAR StartDate = [Selected Period Start]
+		RETURN
+		IF(
+			ISBLANK(StartDate),
+			BLANK(),
+			CALCULATE(
+				DISTINCTCOUNT(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = StartDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No"
+			)
+		)
+		formatString: #,##0
+		lineageTag: 00000002-0002-0002-0002-000000000001
 
-Once the data model is loaded (with relationships between DimOrg, Snapshots, PersonnelActions, and DimDate), define these measures in your model. They are designed to work with the “Earlier Snapshot” and “Later Snapshot” slicers bound to Snapshots[SnapshotDate].
+	measure 'Headcount Period End' = 
+		VAR EndDate = [Selected Period End]
+		RETURN
+		IF(
+			ISBLANK(EndDate),
+			BLANK(),
+			CALCULATE(
+				DISTINCTCOUNT(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = EndDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No"
+			)
+		)
+		formatString: #,##0
+		lineageTag: 00000002-0002-0002-0002-000000000002
 
-// Selected dates from slicers
-SelectedStartDate = MIN ( Snapshots[SnapshotDate] )
-SelectedEndDate   = MAX ( Snapshots[SnapshotDate] )
+	measure 'Average Headcount' = 
+		VAR HC_Start = [Headcount Period Start]
+		VAR HC_End = [Headcount Period End]
+		RETURN
+		IF(
+			ISBLANK(HC_Start) || ISBLANK(HC_End),
+			BLANK(),
+			(HC_Start + HC_End) / 2
+		)
+		formatString: #,##0.0
+		lineageTag: 00000002-0002-0002-0002-000000000003
 
-// On‑hand headcount at start and end (excluding students/interns)
-OnHand_Start =
-CALCULATE (
-    DISTINCTCOUNT ( Snapshots[DoD ID (EDIPI)] ),
-    Snapshots[SnapshotDate] = [SelectedStartDate],
-    Snapshots[StudentIntern] = 0
-)
+	measure 'Headcount Change' = 
+		VAR HC_Start = [Headcount Period Start]
+		VAR HC_End = [Headcount Period End]
+		RETURN
+		IF(
+			ISBLANK(HC_Start) || ISBLANK(HC_End),
+			BLANK(),
+			HC_End - HC_Start
+		)
+		formatString: +#,##0;-#,##0;0
+		lineageTag: 00000002-0002-0002-0002-000000000004
 
-OnHand_End =
-CALCULATE (
-    DISTINCTCOUNT ( Snapshots[DoD ID (EDIPI)] ),
-    Snapshots[SnapshotDate] = [SelectedEndDate],
-    Snapshots[StudentIntern] = 0
-)
+	measure 'Headcount Change Pct' = 
+		VAR HC_Start = [Headcount Period Start]
+		VAR HC_End = [Headcount Period End]
+		RETURN
+		IF(
+			ISBLANK(HC_Start) || ISBLANK(HC_End) || HC_Start = 0,
+			BLANK(),
+			DIVIDE(HC_End - HC_Start, HC_Start, 0)
+		)
+		formatString: +0.0%;-0.0%;0.0%
+		lineageTag: 00000002-0002-0002-0002-000000000005
 
-// Average headcount used as denominator for attrition
-AverageOnHand = DIVIDE ( [OnHand_Start] + [OnHand_End], 2 )
+	measure 'Headcount Including Students Start' = 
+		VAR StartDate = [Selected Period Start]
+		RETURN
+		IF(
+			ISBLANK(StartDate),
+			BLANK(),
+			CALCULATE(
+				DISTINCTCOUNT(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = StartDate
+			)
+		)
+		formatString: #,##0
+		lineageTag: 00000002-0002-0002-0002-000000000006
 
-// Losses between selected dates (external departures only)
-Losses =
-CALCULATE (
-    DISTINCTCOUNT ( PersonnelActions[NAME_PERS_1] ),
-    PersonnelActions[MovementType] = "External",
-    PersonnelActions[EFFECTIVE_DATE_4] > [SelectedStartDate],
-    PersonnelActions[EFFECTIVE_DATE_4] <= [SelectedEndDate]
-)
+	measure 'Headcount Including Students End' = 
+		VAR EndDate = [Selected Period End]
+		RETURN
+		IF(
+			ISBLANK(EndDate),
+			BLANK(),
+			CALCULATE(
+				DISTINCTCOUNT(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = EndDate
+			)
+		)
+		formatString: #,##0
+		lineageTag: 00000002-0002-0002-0002-000000000007
 
-// Attrition rate (as a percentage)
-Attrition % =
-DIVIDE ( [Losses], [AverageOnHand], 0 ) * 100
+	measure 'Student Intern Count Start' = 
+		VAR StartDate = [Selected Period Start]
+		RETURN
+		IF(
+			ISBLANK(StartDate),
+			BLANK(),
+			CALCULATE(
+				DISTINCTCOUNT(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = StartDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "Yes"
+			)
+		)
+		formatString: #,##0
+		lineageTag: 00000002-0002-0002-0002-000000000008
 
-// Non‑voluntary attrition (NOA codes 330, 355, 357, 385)
-NonVoluntaryLosses =
-CALCULATE (
-    DISTINCTCOUNT ( PersonnelActions[NAME_PERS_1] ),
-    PersonnelActions[FIRST_NOA_CODE_5A] IN { "330", "355", "357", "385" },
-    PersonnelActions[EFFECTIVE_DATE_4] > [SelectedStartDate],
-    PersonnelActions[EFFECTIVE_DATE_4] <= [SelectedEndDate]
-)
-NonVoluntaryAttrition % =
-DIVIDE ( [NonVoluntaryLosses], [AverageOnHand], 0 ) * 100
+	measure 'Student Intern Count End' = 
+		VAR EndDate = [Selected Period End]
+		RETURN
+		IF(
+			ISBLANK(EndDate),
+			BLANK(),
+			CALCULATE(
+				DISTINCTCOUNT(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = EndDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "Yes"
+			)
+		)
+		formatString: #,##0
+		lineageTag: 00000002-0002-0002-0002-000000000009
 
-VoluntaryAttrition % = [Attrition %] - [NonVoluntaryAttrition %]
 
-// Internal and external attrition rates
-Internal Losses =
-CALCULATE (
-    DISTINCTCOUNT ( PersonnelActions[NAME_PERS_1] ),
-    PersonnelActions[MovementType] = "Internal",
-    PersonnelActions[EFFECTIVE_DATE_4] > [SelectedStartDate],
-    PersonnelActions[EFFECTIVE_DATE_4] <= [SelectedEndDate]
-)
-External Losses =
-CALCULATE (
-    DISTINCTCOUNT ( PersonnelActions[NAME_PERS_1] ),
-    PersonnelActions[MovementType] = "External",
-    PersonnelActions[EFFECTIVE_DATE_4] > [SelectedStartDate],
-    PersonnelActions[EFFECTIVE_DATE_4] <= [SelectedEndDate]
-)
+	/// ========================================================
+	/// GROUP 3: CORE RETENTION METRICS
+	/// ========================================================
 
-Internal Attrition % = DIVIDE ( [Internal Losses], [AverageOnHand], 0 ) * 100
-External Attrition % = DIVIDE ( [External Losses], [AverageOnHand], 0 ) * 100
+	measure 'Employees Present Both Periods' = 
+		VAR StartDate = [Selected Period Start]
+		VAR EndDate = [Selected Period End]
+		VAR StartEmployees = 
+			CALCULATETABLE(
+				VALUES(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = StartDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No"
+			)
+		VAR EndEmployees = 
+			CALCULATETABLE(
+				VALUES(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = EndDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No"
+			)
+		RETURN
+		IF(
+			ISBLANK(StartDate) || ISBLANK(EndDate),
+			BLANK(),
+			COUNTROWS(INTERSECT(StartEmployees, EndEmployees))
+		)
+		formatString: #,##0
+		lineageTag: 00000003-0003-0003-0003-000000000001
 
-// Retained employees (present in both snapshots with same org/series)
-RetainedTable =
-SUMMARIZE (
-    INTERSECT (
-        VALUES ( Snapshots[DoD ID (EDIPI)] ),
-        VALUES ( Snapshots[DoD ID (EDIPI)] )
-    ),
-    "EDIPI", Snapshots[DoD ID (EDIPI)],
-    "StartOrg", CALCULATE ( SELECTEDVALUE ( Snapshots[OrgFirst2] ), Snapshots[SnapshotDate] = [SelectedStartDate] ),
-    "EndOrg",   CALCULATE ( SELECTEDVALUE ( Snapshots[OrgFirst2] ), Snapshots[SnapshotDate] = [SelectedEndDate] ),
-    "StartSeries", CALCULATE ( SELECTEDVALUE ( Snapshots[Occ Series Current] ), Snapshots[SnapshotDate] = [SelectedStartDate] ),
-    "EndSeries",   CALCULATE ( SELECTEDVALUE ( Snapshots[Occ Series Current] ), Snapshots[SnapshotDate] = [SelectedEndDate] )
-)
+	measure 'Retention Rate Agency' = 
+		VAR Remaining = [Employees Present Both Periods]
+		VAR StartCount = [Headcount Period Start]
+		RETURN
+		IF(
+			ISBLANK(Remaining) || ISBLANK(StartCount) || StartCount = 0,
+			BLANK(),
+			DIVIDE(Remaining, StartCount, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000003-0003-0003-0003-000000000002
 
-RetainedEmployees =
-COUNTROWS ( FILTER ( RetainedTable, [StartOrg] = [EndOrg] ) )
+	measure 'Employees Stayed Same Org' = 
+		VAR StartDate = [Selected Period Start]
+		VAR EndDate = [Selected Period End]
+		VAR StartData = 
+			SELECTCOLUMNS(
+				FILTER(
+					FactEmployeeSnapshot,
+					FactEmployeeSnapshot[SnapshotDate] = StartDate &&
+					FactEmployeeSnapshot[IsStudentIntern] = "No"
+				),
+				"EmpKey", FactEmployeeSnapshot[EmployeeKey],
+				"StartOrg", FactEmployeeSnapshot[OrgCode]
+			)
+		VAR EndData = 
+			SELECTCOLUMNS(
+				FILTER(
+					FactEmployeeSnapshot,
+					FactEmployeeSnapshot[SnapshotDate] = EndDate &&
+					FactEmployeeSnapshot[IsStudentIntern] = "No"
+				),
+				"EmpKey", FactEmployeeSnapshot[EmployeeKey],
+				"EndOrg", FactEmployeeSnapshot[OrgCode]
+			)
+		VAR Joined = NATURALINNERJOIN(StartData, EndData)
+		VAR SameOrg = FILTER(Joined, [StartOrg] = [EndOrg])
+		RETURN
+		IF(
+			ISBLANK(StartDate) || ISBLANK(EndDate),
+			BLANK(),
+			COUNTROWS(SameOrg)
+		)
+		formatString: #,##0
+		lineageTag: 00000003-0003-0003-0003-000000000003
 
-Retention Rate % =
-DIVIDE ( [RetainedEmployees], [OnHand_Start], 0 ) * 100
+	measure 'Retention Rate by Org' = 
+		VAR StayedSameOrg = [Employees Stayed Same Org]
+		VAR StartCount = [Headcount Period Start]
+		RETURN
+		IF(
+			ISBLANK(StayedSameOrg) || ISBLANK(StartCount) || StartCount = 0,
+			BLANK(),
+			DIVIDE(StayedSameOrg, StartCount, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000003-0003-0003-0003-000000000004
 
-// New‑hire attrition
-NewHire OnHand Start =
-CALCULATE (
-    DISTINCTCOUNT ( Snapshots[DoD ID (EDIPI)] ),
-    Snapshots[SnapshotDate] = [SelectedStartDate],
-    Snapshots[StudentIntern] = 0,
-    Snapshots[NewHireFlag] = 1
-)
-NewHire OnHand End =
-CALCULATE (
-    DISTINCTCOUNT ( Snapshots[DoD ID (EDIPI)] ),
-    Snapshots[SnapshotDate] = [SelectedEndDate],
-    Snapshots[StudentIntern] = 0,
-    Snapshots[NewHireFlag] = 1
-)
-NewHire Avg OnHand = DIVIDE ( [NewHire OnHand Start] + [NewHire OnHand End], 2 )
+	measure 'Employees Stayed Same Center' = 
+		VAR StartDate = [Selected Period Start]
+		VAR EndDate = [Selected Period End]
+		VAR StartData = 
+			SELECTCOLUMNS(
+				FILTER(
+					FactEmployeeSnapshot,
+					FactEmployeeSnapshot[SnapshotDate] = StartDate &&
+					FactEmployeeSnapshot[IsStudentIntern] = "No"
+				),
+				"EmpKey", FactEmployeeSnapshot[EmployeeKey],
+				"StartCenter", FactEmployeeSnapshot[Center]
+			)
+		VAR EndData = 
+			SELECTCOLUMNS(
+				FILTER(
+					FactEmployeeSnapshot,
+					FactEmployeeSnapshot[SnapshotDate] = EndDate &&
+					FactEmployeeSnapshot[IsStudentIntern] = "No"
+				),
+				"EmpKey", FactEmployeeSnapshot[EmployeeKey],
+				"EndCenter", FactEmployeeSnapshot[Center]
+			)
+		VAR Joined = NATURALINNERJOIN(StartData, EndData)
+		VAR SameCenter = FILTER(Joined, [StartCenter] = [EndCenter])
+		RETURN
+		IF(
+			ISBLANK(StartDate) || ISBLANK(EndDate),
+			BLANK(),
+			COUNTROWS(SameCenter)
+		)
+		formatString: #,##0
+		lineageTag: 00000003-0003-0003-0003-000000000005
 
-NewHire Losses =
-CALCULATE (
-    DISTINCTCOUNT ( PersonnelActions[NAME_PERS_1] ),
-    PersonnelActions[MovementType] = "External",
-    PersonnelActions[EFFECTIVE_DATE_4] > [SelectedStartDate],
-    PersonnelActions[EFFECTIVE_DATE_4] <= [SelectedEndDate],
-    RELATED ( Snapshots[NewHireFlag] ) = 1
-)
-NewHire Attrition % =
-DIVIDE ( [NewHire Losses], [NewHire Avg OnHand], 0 ) * 100
+	measure 'Retention Rate by Center' = 
+		VAR StayedSameCenter = [Employees Stayed Same Center]
+		VAR StartCount = [Headcount Period Start]
+		RETURN
+		IF(
+			ISBLANK(StayedSameCenter) || ISBLANK(StartCount) || StartCount = 0,
+			BLANK(),
+			DIVIDE(StayedSameCenter, StartCount, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000003-0003-0003-0003-000000000006
 
-// Average and median tenure
-Average Tenure = AVERAGE ( Snapshots[TenureYears] )
-Median Tenure =
-MEDIANX (
-    VALUES ( Snapshots[DoD ID (EDIPI)] ),
-    Snapshots[TenureYears]
-)
-Formatted Average Tenure =
-VAR AvgYears      = [Average Tenure]
-VAR Years         = INT ( AvgYears )
-VAR RemainingMonths = ROUND ( ( AvgYears - Years ) * 12, 0 )
-RETURN
-    IF (
-        RemainingMonths = 0,
-        FORMAT ( Years, "0" ) & " years",
-        FORMAT ( Years, "0" ) & " years and " & FORMAT ( RemainingMonths, "0" ) & " months"
-    )
+	measure 'Employees Stayed Same Series' = 
+		VAR StartDate = [Selected Period Start]
+		VAR EndDate = [Selected Period End]
+		VAR StartData = 
+			SELECTCOLUMNS(
+				FILTER(
+					FactEmployeeSnapshot,
+					FactEmployeeSnapshot[SnapshotDate] = StartDate &&
+					FactEmployeeSnapshot[IsStudentIntern] = "No"
+				),
+				"EmpKey", FactEmployeeSnapshot[EmployeeKey],
+				"StartSeries", FactEmployeeSnapshot[SeriesCode]
+			)
+		VAR EndData = 
+			SELECTCOLUMNS(
+				FILTER(
+					FactEmployeeSnapshot,
+					FactEmployeeSnapshot[SnapshotDate] = EndDate &&
+					FactEmployeeSnapshot[IsStudentIntern] = "No"
+				),
+				"EmpKey", FactEmployeeSnapshot[EmployeeKey],
+				"EndSeries", FactEmployeeSnapshot[SeriesCode]
+			)
+		VAR Joined = NATURALINNERJOIN(StartData, EndData)
+		VAR SameSeries = FILTER(Joined, [StartSeries] = [EndSeries])
+		RETURN
+		IF(
+			ISBLANK(StartDate) || ISBLANK(EndDate),
+			BLANK(),
+			COUNTROWS(SameSeries)
+		)
+		formatString: #,##0
+		lineageTag: 00000003-0003-0003-0003-000000000007
 
-These measures rely on the definitions of attrition and retention—attrition is the number of leavers divided by the average number of employees ￼, while retention rate is the complement of attrition ￼. Adjust column names to match your actual dataset, and the model will support dynamic comparisons between any two snapshot dates selected via slicers.
+	measure 'Retention Rate by Series' = 
+		VAR StayedSameSeries = [Employees Stayed Same Series]
+		VAR StartCount = [Headcount Period Start]
+		RETURN
+		IF(
+			ISBLANK(StayedSameSeries) || ISBLANK(StartCount) || StartCount = 0,
+			BLANK(),
+			DIVIDE(StayedSameSeries, StartCount, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000003-0003-0003-0003-000000000008
+
+
+	/// ========================================================
+	/// GROUP 4: CORE ATTRITION METRICS
+	/// ========================================================
+
+	measure 'Losses Total' = 
+		VAR StartDate = [Selected Period Start]
+		VAR EndDate = [Selected Period End]
+		VAR StartEmployees = 
+			CALCULATETABLE(
+				VALUES(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = StartDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No"
+			)
+		VAR EndEmployees = 
+			CALCULATETABLE(
+				VALUES(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = EndDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No"
+			)
+		RETURN
+		IF(
+			ISBLANK(StartDate) || ISBLANK(EndDate),
+			BLANK(),
+			COUNTROWS(EXCEPT(StartEmployees, EndEmployees))
+		)
+		formatString: #,##0
+		lineageTag: 00000004-0004-0004-0004-000000000001
+
+	measure 'Attrition Rate' = 
+		VAR Losses = [Losses Total]
+		VAR AvgHC = [Average Headcount]
+		RETURN
+		IF(
+			ISBLANK(Losses) || ISBLANK(AvgHC) || AvgHC = 0,
+			BLANK(),
+			DIVIDE(Losses, AvgHC, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000004-0004-0004-0004-000000000002
+
+	measure 'Gains Total' = 
+		VAR StartDate = [Selected Period Start]
+		VAR EndDate = [Selected Period End]
+		VAR StartEmployees = 
+			CALCULATETABLE(
+				VALUES(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = StartDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No"
+			)
+		VAR EndEmployees = 
+			CALCULATETABLE(
+				VALUES(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = EndDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No"
+			)
+		RETURN
+		IF(
+			ISBLANK(StartDate) || ISBLANK(EndDate),
+			BLANK(),
+			COUNTROWS(EXCEPT(EndEmployees, StartEmployees))
+		)
+		formatString: #,##0
+		lineageTag: 00000004-0004-0004-0004-000000000003
+
+	measure 'Net Change' = 
+		VAR G = [Gains Total]
+		VAR L = [Losses Total]
+		RETURN
+		IF(
+			ISBLANK(G) || ISBLANK(L),
+			BLANK(),
+			G - L
+		)
+		formatString: +#,##0;-#,##0;0
+		lineageTag: 00000004-0004-0004-0004-000000000004
+
+	measure 'Turnover Rate' = 
+		VAR Losses = [Losses Total]
+		VAR Gains = [Gains Total]
+		VAR AvgHC = [Average Headcount]
+		RETURN
+		IF(
+			ISBLANK(Losses) || ISBLANK(Gains) || ISBLANK(AvgHC) || AvgHC = 0,
+			BLANK(),
+			DIVIDE(Losses + Gains, AvgHC, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000004-0004-0004-0004-000000000005
+
+	measure 'Separation Rate' = 
+		VAR Losses = [Losses Total]
+		VAR StartCount = [Headcount Period Start]
+		RETURN
+		IF(
+			ISBLANK(Losses) || ISBLANK(StartCount) || StartCount = 0,
+			BLANK(),
+			DIVIDE(Losses, StartCount, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000004-0004-0004-0004-000000000006
+
+	measure 'Accession Rate' = 
+		VAR Gains = [Gains Total]
+		VAR EndCount = [Headcount Period End]
+		RETURN
+		IF(
+			ISBLANK(Gains) || ISBLANK(EndCount) || EndCount = 0,
+			BLANK(),
+			DIVIDE(Gains, EndCount, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000004-0004-0004-0004-000000000007
+
+
+	/// ========================================================
+	/// GROUP 5: INTERNAL MOVEMENT METRICS
+	/// ========================================================
+
+	measure 'Employees Moved Org' = 
+		VAR StartDate = [Selected Period Start]
+		VAR EndDate = [Selected Period End]
+		VAR StartData = 
+			SELECTCOLUMNS(
+				FILTER(
+					FactEmployeeSnapshot,
+					FactEmployeeSnapshot[SnapshotDate] = StartDate &&
+					FactEmployeeSnapshot[IsStudentIntern] = "No"
+				),
+				"EmpKey", FactEmployeeSnapshot[EmployeeKey],
+				"StartOrg", FactEmployeeSnapshot[OrgCode]
+			)
+		VAR EndData = 
+			SELECTCOLUMNS(
+				FILTER(
+					FactEmployeeSnapshot,
+					FactEmployeeSnapshot[SnapshotDate] = EndDate &&
+					FactEmployeeSnapshot[IsStudentIntern] = "No"
+				),
+				"EmpKey", FactEmployeeSnapshot[EmployeeKey],
+				"EndOrg", FactEmployeeSnapshot[OrgCode]
+			)
+		VAR Joined = NATURALINNERJOIN(StartData, EndData)
+		VAR MovedOrg = FILTER(Joined, [StartOrg] <> [EndOrg])
+		RETURN
+		IF(
+			ISBLANK(StartDate) || ISBLANK(EndDate),
+			BLANK(),
+			COUNTROWS(MovedOrg)
+		)
+		formatString: #,##0
+		lineageTag: 00000005-0005-0005-0005-000000000001
+
+	measure 'Internal Movement Rate Org' = 
+		VAR Moved = [Employees Moved Org]
+		VAR StartCount = [Headcount Period Start]
+		RETURN
+		IF(
+			ISBLANK(Moved) || ISBLANK(StartCount) || StartCount = 0,
+			BLANK(),
+			DIVIDE(Moved, StartCount, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000005-0005-0005-0005-000000000002
+
+	measure 'Employees Moved Center' = 
+		VAR StartDate = [Selected Period Start]
+		VAR EndDate = [Selected Period End]
+		VAR StartData = 
+			SELECTCOLUMNS(
+				FILTER(
+					FactEmployeeSnapshot,
+					FactEmployeeSnapshot[SnapshotDate] = StartDate &&
+					FactEmployeeSnapshot[IsStudentIntern] = "No"
+				),
+				"EmpKey", FactEmployeeSnapshot[EmployeeKey],
+				"StartCenter", FactEmployeeSnapshot[Center]
+			)
+		VAR EndData = 
+			SELECTCOLUMNS(
+				FILTER(
+					FactEmployeeSnapshot,
+					FactEmployeeSnapshot[SnapshotDate] = EndDate &&
+					FactEmployeeSnapshot[IsStudentIntern] = "No"
+				),
+				"EmpKey", FactEmployeeSnapshot[EmployeeKey],
+				"EndCenter", FactEmployeeSnapshot[Center]
+			)
+		VAR Joined = NATURALINNERJOIN(StartData, EndData)
+		VAR MovedCenter = FILTER(Joined, [StartCenter] <> [EndCenter])
+		RETURN
+		IF(
+			ISBLANK(StartDate) || ISBLANK(EndDate),
+			BLANK(),
+			COUNTROWS(MovedCenter)
+		)
+		formatString: #,##0
+		lineageTag: 00000005-0005-0005-0005-000000000003
+
+	measure 'Internal Movement Rate Center' = 
+		VAR Moved = [Employees Moved Center]
+		VAR StartCount = [Headcount Period Start]
+		RETURN
+		IF(
+			ISBLANK(Moved) || ISBLANK(StartCount) || StartCount = 0,
+			BLANK(),
+			DIVIDE(Moved, StartCount, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000005-0005-0005-0005-000000000004
+
+	measure 'Employees Changed Series' = 
+		VAR StartDate = [Selected Period Start]
+		VAR EndDate = [Selected Period End]
+		VAR StartData = 
+			SELECTCOLUMNS(
+				FILTER(
+					FactEmployeeSnapshot,
+					FactEmployeeSnapshot[SnapshotDate] = StartDate &&
+					FactEmployeeSnapshot[IsStudentIntern] = "No"
+				),
+				"EmpKey", FactEmployeeSnapshot[EmployeeKey],
+				"StartSeries", FactEmployeeSnapshot[SeriesCode]
+			)
+		VAR EndData = 
+			SELECTCOLUMNS(
+				FILTER(
+					FactEmployeeSnapshot,
+					FactEmployeeSnapshot[SnapshotDate] = EndDate &&
+					FactEmployeeSnapshot[IsStudentIntern] = "No"
+				),
+				"EmpKey", FactEmployeeSnapshot[EmployeeKey],
+				"EndSeries", FactEmployeeSnapshot[SeriesCode]
+			)
+		VAR Joined = NATURALINNERJOIN(StartData, EndData)
+		VAR ChangedSeries = FILTER(Joined, [StartSeries] <> [EndSeries])
+		RETURN
+		IF(
+			ISBLANK(StartDate) || ISBLANK(EndDate),
+			BLANK(),
+			COUNTROWS(ChangedSeries)
+		)
+		formatString: #,##0
+		lineageTag: 00000005-0005-0005-0005-000000000005
+
+	measure 'Series Change Rate' = 
+		VAR Changed = [Employees Changed Series]
+		VAR StartCount = [Headcount Period Start]
+		RETURN
+		IF(
+			ISBLANK(Changed) || ISBLANK(StartCount) || StartCount = 0,
+			BLANK(),
+			DIVIDE(Changed, StartCount, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000005-0005-0005-0005-000000000006
+
+
+	/// ========================================================
+	/// GROUP 6: NEW HIRE ATTRITION METRICS
+	/// ========================================================
+
+	measure 'New Hire Count Start' = 
+		VAR StartDate = [Selected Period Start]
+		RETURN
+		IF(
+			ISBLANK(StartDate),
+			BLANK(),
+			CALCULATE(
+				DISTINCTCOUNT(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = StartDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No",
+				FactEmployeeSnapshot[IsNewHire] = "Yes"
+			)
+		)
+		formatString: #,##0
+		lineageTag: 00000006-0006-0006-0006-000000000001
+
+	measure 'New Hire Count End' = 
+		VAR EndDate = [Selected Period End]
+		RETURN
+		IF(
+			ISBLANK(EndDate),
+			BLANK(),
+			CALCULATE(
+				DISTINCTCOUNT(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = EndDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No",
+				FactEmployeeSnapshot[IsNewHire] = "Yes"
+			)
+		)
+		formatString: #,##0
+		lineageTag: 00000006-0006-0006-0006-000000000002
+
+	measure 'New Hire Losses' = 
+		VAR StartDate = [Selected Period Start]
+		VAR EndDate = [Selected Period End]
+		VAR NewHiresStart = 
+			CALCULATETABLE(
+				VALUES(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = StartDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No",
+				FactEmployeeSnapshot[IsNewHire] = "Yes"
+			)
+		VAR EndEmployees = 
+			CALCULATETABLE(
+				VALUES(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = EndDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No"
+			)
+		RETURN
+		IF(
+			ISBLANK(StartDate) || ISBLANK(EndDate),
+			BLANK(),
+			COUNTROWS(EXCEPT(NewHiresStart, EndEmployees))
+		)
+		formatString: #,##0
+		lineageTag: 00000006-0006-0006-0006-000000000003
+
+	measure 'New Hire Attrition Rate' = 
+		VAR Losses = [New Hire Losses]
+		VAR NewHireStart = [New Hire Count Start]
+		RETURN
+		IF(
+			ISBLANK(Losses) || ISBLANK(NewHireStart) || NewHireStart = 0,
+			BLANK(),
+			DIVIDE(Losses, NewHireStart, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000006-0006-0006-0006-000000000004
+
+	measure 'New Hire Retention Rate' = 
+		VAR AttritionRate = [New Hire Attrition Rate]
+		RETURN
+		IF(
+			ISBLANK(AttritionRate),
+			BLANK(),
+			1 - AttritionRate
+		)
+		formatString: 0.0%
+		lineageTag: 00000006-0006-0006-0006-000000000005
+
+	measure 'New Hire Pct of Workforce Start' = 
+		VAR NewHires = [New Hire Count Start]
+		VAR TotalHC = [Headcount Period Start]
+		RETURN
+		IF(
+			ISBLANK(NewHires) || ISBLANK(TotalHC) || TotalHC = 0,
+			BLANK(),
+			DIVIDE(NewHires, TotalHC, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000006-0006-0006-0006-000000000006
+
+	measure 'New Hire Pct of Workforce End' = 
+		VAR NewHires = [New Hire Count End]
+		VAR TotalHC = [Headcount Period End]
+		RETURN
+		IF(
+			ISBLANK(NewHires) || ISBLANK(TotalHC) || TotalHC = 0,
+			BLANK(),
+			DIVIDE(NewHires, TotalHC, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000006-0006-0006-0006-000000000007
+
+
+	/// ========================================================
+	/// GROUP 7: PROBATIONARY EMPLOYEE METRICS
+	/// ========================================================
+
+	measure 'Probationary Count Start' = 
+		VAR StartDate = [Selected Period Start]
+		RETURN
+		IF(
+			ISBLANK(StartDate),
+			BLANK(),
+			CALCULATE(
+				DISTINCTCOUNT(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = StartDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No",
+				FactEmployeeSnapshot[IsProbationary] = "Yes"
+			)
+		)
+		formatString: #,##0
+		lineageTag: 00000007-0007-0007-0007-000000000001
+
+	measure 'Probationary Count End' = 
+		VAR EndDate = [Selected Period End]
+		RETURN
+		IF(
+			ISBLANK(EndDate),
+			BLANK(),
+			CALCULATE(
+				DISTINCTCOUNT(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = EndDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No",
+				FactEmployeeSnapshot[IsProbationary] = "Yes"
+			)
+		)
+		formatString: #,##0
+		lineageTag: 00000007-0007-0007-0007-000000000002
+
+	measure 'Probationary Losses' = 
+		VAR StartDate = [Selected Period Start]
+		VAR EndDate = [Selected Period End]
+		VAR ProbStart = 
+			CALCULATETABLE(
+				VALUES(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = StartDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No",
+				FactEmployeeSnapshot[IsProbationary] = "Yes"
+			)
+		VAR EndEmployees = 
+			CALCULATETABLE(
+				VALUES(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = EndDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No"
+			)
+		RETURN
+		IF(
+			ISBLANK(StartDate) || ISBLANK(EndDate),
+			BLANK(),
+			COUNTROWS(EXCEPT(ProbStart, EndEmployees))
+		)
+		formatString: #,##0
+		lineageTag: 00000007-0007-0007-0007-000000000003
+
+	measure 'Probationary Attrition Rate' = 
+		VAR Losses = [Probationary Losses]
+		VAR ProbCount = [Probationary Count Start]
+		RETURN
+		IF(
+			ISBLANK(Losses) || ISBLANK(ProbCount) || ProbCount = 0,
+			BLANK(),
+			DIVIDE(Losses, ProbCount, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000007-0007-0007-0007-000000000004
+
+	measure 'Probationary Retention Rate' = 
+		VAR AttritionRate = [Probationary Attrition Rate]
+		RETURN
+		IF(
+			ISBLANK(AttritionRate),
+			BLANK(),
+			1 - AttritionRate
+		)
+		formatString: 0.0%
+		lineageTag: 00000007-0007-0007-0007-000000000005
+
+	measure 'Probationary Pct of Workforce' = 
+		VAR Prob = [Probationary Count Start]
+		VAR TotalHC = [Headcount Period Start]
+		RETURN
+		IF(
+			ISBLANK(Prob) || ISBLANK(TotalHC) || TotalHC = 0,
+			BLANK(),
+			DIVIDE(Prob, TotalHC, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000007-0007-0007-0007-000000000006
+
+
+	/// ========================================================
+	/// GROUP 8: ANNUALIZED METRICS
+	/// ========================================================
+
+	measure 'Annualized Attrition Rate' = 
+		VAR AttritionRate = [Attrition Rate]
+		VAR DaysInPeriod = [Days in Period]
+		RETURN
+		IF(
+			ISBLANK(AttritionRate) || ISBLANK(DaysInPeriod) || DaysInPeriod = 0,
+			BLANK(),
+			1 - POWER(1 - AttritionRate, 365 / DaysInPeriod)
+		)
+		formatString: 0.0%
+		lineageTag: 00000008-0008-0008-0008-000000000001
+
+	measure 'Annualized Retention Rate' = 
+		VAR RetentionRate = [Retention Rate Agency]
+		VAR DaysInPeriod = [Days in Period]
+		RETURN
+		IF(
+			ISBLANK(RetentionRate) || ISBLANK(DaysInPeriod) || DaysInPeriod = 0,
+			BLANK(),
+			POWER(RetentionRate, 365 / DaysInPeriod)
+		)
+		formatString: 0.0%
+		lineageTag: 00000008-0008-0008-0008-000000000002
+
+	measure 'Annualized Turnover Rate' = 
+		VAR TurnoverRate = [Turnover Rate]
+		VAR DaysInPeriod = [Days in Period]
+		RETURN
+		IF(
+			ISBLANK(TurnoverRate) || ISBLANK(DaysInPeriod) || DaysInPeriod = 0,
+			BLANK(),
+			TurnoverRate * (365 / DaysInPeriod)
+		)
+		formatString: 0.0%
+		lineageTag: 00000008-0008-0008-0008-000000000003
+
+	measure 'Monthly Attrition Rate' = 
+		VAR AttritionRate = [Attrition Rate]
+		VAR DaysInPeriod = [Days in Period]
+		RETURN
+		IF(
+			ISBLANK(AttritionRate) || ISBLANK(DaysInPeriod) || DaysInPeriod = 0,
+			BLANK(),
+			1 - POWER(1 - AttritionRate, 30 / DaysInPeriod)
+		)
+		formatString: 0.00%
+		lineageTag: 00000008-0008-0008-0008-000000000004
+
+	measure 'Quarterly Attrition Rate' = 
+		VAR AttritionRate = [Attrition Rate]
+		VAR DaysInPeriod = [Days in Period]
+		RETURN
+		IF(
+			ISBLANK(AttritionRate) || ISBLANK(DaysInPeriod) || DaysInPeriod = 0,
+			BLANK(),
+			1 - POWER(1 - AttritionRate, 91 / DaysInPeriod)
+		)
+		formatString: 0.0%
+		lineageTag: 00000008-0008-0008-0008-000000000005
+
+
+	/// ========================================================
+	/// GROUP 9: ADVANCED ANALYTICS
+	/// ========================================================
+
+	measure 'Workforce Stability Index' = 
+		VAR Retention = [Retention Rate Agency]
+		VAR Attrition = [Attrition Rate]
+		VAR InternalMove = [Internal Movement Rate Org]
+		RETURN
+		IF(
+			ISBLANK(Retention) || ISBLANK(Attrition),
+			BLANK(),
+			(Retention * 0.5) + 
+			((1 - Attrition) * 0.3) + 
+			((1 - COALESCE(InternalMove, 0)) * 0.2)
+		)
+		formatString: 0.00
+		lineageTag: 00000009-0009-0009-0009-000000000001
+
+	measure 'Retention Risk Score' = 
+		VAR Attrition = [Attrition Rate]
+		VAR NewHireAttrition = [New Hire Attrition Rate]
+		VAR ProbAttrition = [Probationary Attrition Rate]
+		RETURN
+		IF(
+			ISBLANK(Attrition),
+			BLANK(),
+			(COALESCE(Attrition, 0) * 0.4) + 
+			(COALESCE(NewHireAttrition, 0) * 0.35) + 
+			(COALESCE(ProbAttrition, 0) * 0.25)
+		)
+		formatString: 0.00
+		lineageTag: 00000009-0009-0009-0009-000000000002
+
+	measure 'Expected Losses Next Period' = 
+		VAR CurrentAttrition = [Attrition Rate]
+		VAR CurrentHC = [Headcount Period End]
+		RETURN
+		IF(
+			ISBLANK(CurrentAttrition) || ISBLANK(CurrentHC),
+			BLANK(),
+			ROUND(CurrentHC * CurrentAttrition, 0)
+		)
+		formatString: #,##0
+		lineageTag: 00000009-0009-0009-0009-000000000003
+
+	measure 'Break Even Hires Needed' = 
+		VAR ExpectedLosses = [Expected Losses Next Period]
+		RETURN
+		IF(
+			ISBLANK(ExpectedLosses),
+			BLANK(),
+			ExpectedLosses
+		)
+		formatString: #,##0
+		lineageTag: 00000009-0009-0009-0009-000000000004
+
+	measure 'Years to Replace Workforce' = 
+		VAR AnnualizedAttr = [Annualized Attrition Rate]
+		RETURN
+		IF(
+			ISBLANK(AnnualizedAttr) || AnnualizedAttr = 0,
+			BLANK(),
+			DIVIDE(1, AnnualizedAttr, BLANK())
+		)
+		formatString: 0.0
+		lineageTag: 00000009-0009-0009-0009-000000000005
+
+	measure 'Churn Rate' = 
+		VAR Losses = [Losses Total]
+		VAR Gains = [Gains Total]
+		VAR StartCount = [Headcount Period Start]
+		RETURN
+		IF(
+			ISBLANK(Losses) || ISBLANK(Gains) || ISBLANK(StartCount) || StartCount = 0,
+			BLANK(),
+			DIVIDE(MIN(Losses, Gains), StartCount, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000009-0009-0009-0009-000000000006
+
+	measure 'Growth Through Hiring' = 
+		VAR Gains = [Gains Total]
+		VAR Losses = [Losses Total]
+		RETURN
+		IF(
+			ISBLANK(Gains) || ISBLANK(Losses),
+			BLANK(),
+			IF(Gains > Losses, Gains - Losses, 0)
+		)
+		formatString: #,##0
+		lineageTag: 00000009-0009-0009-0009-000000000007
+
+	measure 'Shrinkage Through Attrition' = 
+		VAR Gains = [Gains Total]
+		VAR Losses = [Losses Total]
+		RETURN
+		IF(
+			ISBLANK(Gains) || ISBLANK(Losses),
+			BLANK(),
+			IF(Losses > Gains, Losses - Gains, 0)
+		)
+		formatString: #,##0
+		lineageTag: 00000009-0009-0009-0009-000000000008
+
+	measure 'Retention vs Target 90' = 
+		VAR Actual = [Retention Rate Agency]
+		VAR Target = 0.90
+		RETURN
+		IF(
+			ISBLANK(Actual),
+			BLANK(),
+			Actual - Target
+		)
+		formatString: +0.0%;-0.0%;0.0%
+		lineageTag: 00000009-0009-0009-0009-000000000009
+
+	measure 'Attrition vs Target 10' = 
+		VAR Actual = [Attrition Rate]
+		VAR Target = 0.10
+		RETURN
+		IF(
+			ISBLANK(Actual),
+			BLANK(),
+			Actual - Target
+		)
+		formatString: +0.0%;-0.0%;0.0%
+		lineageTag: 00000009-0009-0009-0009-000000000010
+
+
+	/// ========================================================
+	/// GROUP 10: TENURE-BASED ANALYSIS
+	/// ========================================================
+
+	measure 'Avg Tenure Years Start' = 
+		VAR StartDate = [Selected Period Start]
+		RETURN
+		IF(
+			ISBLANK(StartDate),
+			BLANK(),
+			CALCULATE(
+				AVERAGEX(
+					FactEmployeeSnapshot,
+					VAR SCDText = FactEmployeeSnapshot[SCD Civilian]
+					VAR SCDDate = IF(ISBLANK(SCDText), BLANK(), DATEVALUE(SCDText))
+					RETURN
+					IF(ISBLANK(SCDDate), BLANK(), DATEDIFF(SCDDate, StartDate, DAY) / 365.25)
+				),
+				FactEmployeeSnapshot[SnapshotDate] = StartDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No"
+			)
+		)
+		formatString: 0.0
+		lineageTag: 00000010-0010-0010-0010-000000000001
+
+	measure 'Avg Tenure Years End' = 
+		VAR EndDate = [Selected Period End]
+		RETURN
+		IF(
+			ISBLANK(EndDate),
+			BLANK(),
+			CALCULATE(
+				AVERAGEX(
+					FactEmployeeSnapshot,
+					VAR SCDText = FactEmployeeSnapshot[SCD Civilian]
+					VAR SCDDate = IF(ISBLANK(SCDText), BLANK(), DATEVALUE(SCDText))
+					RETURN
+					IF(ISBLANK(SCDDate), BLANK(), DATEDIFF(SCDDate, EndDate, DAY) / 365.25)
+				),
+				FactEmployeeSnapshot[SnapshotDate] = EndDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No"
+			)
+		)
+		formatString: 0.0
+		lineageTag: 00000010-0010-0010-0010-000000000002
+
+	measure 'Tenure Change' = 
+		VAR TenureStart = [Avg Tenure Years Start]
+		VAR TenureEnd = [Avg Tenure Years End]
+		RETURN
+		IF(
+			ISBLANK(TenureStart) || ISBLANK(TenureEnd),
+			BLANK(),
+			TenureEnd - TenureStart
+		)
+		formatString: +0.0;-0.0;0.0
+		lineageTag: 00000010-0010-0010-0010-000000000003
+
+
+	/// ========================================================
+	/// GROUP 11: SUPERVISOR METRICS
+	/// ========================================================
+
+	measure 'Supervisor Count Start' = 
+		VAR StartDate = [Selected Period Start]
+		RETURN
+		IF(
+			ISBLANK(StartDate),
+			BLANK(),
+			CALCULATE(
+				DISTINCTCOUNT(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = StartDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No",
+				FactEmployeeSnapshot[Supervisory Status] IN {"1", "2", "4", "5", "6", "7"}
+			)
+		)
+		formatString: #,##0
+		lineageTag: 00000011-0011-0011-0011-000000000001
+
+	measure 'Supervisor Count End' = 
+		VAR EndDate = [Selected Period End]
+		RETURN
+		IF(
+			ISBLANK(EndDate),
+			BLANK(),
+			CALCULATE(
+				DISTINCTCOUNT(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = EndDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No",
+				FactEmployeeSnapshot[Supervisory Status] IN {"1", "2", "4", "5", "6", "7"}
+			)
+		)
+		formatString: #,##0
+		lineageTag: 00000011-0011-0011-0011-000000000002
+
+	measure 'Supervisor Losses' = 
+		VAR StartDate = [Selected Period Start]
+		VAR EndDate = [Selected Period End]
+		VAR SupervisorsStart = 
+			CALCULATETABLE(
+				VALUES(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = StartDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No",
+				FactEmployeeSnapshot[Supervisory Status] IN {"1", "2", "4", "5", "6", "7"}
+			)
+		VAR EndEmployees = 
+			CALCULATETABLE(
+				VALUES(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = EndDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No"
+			)
+		RETURN
+		IF(
+			ISBLANK(StartDate) || ISBLANK(EndDate),
+			BLANK(),
+			COUNTROWS(EXCEPT(SupervisorsStart, EndEmployees))
+		)
+		formatString: #,##0
+		lineageTag: 00000011-0011-0011-0011-000000000003
+
+	measure 'Supervisor Attrition Rate' = 
+		VAR Losses = [Supervisor Losses]
+		VAR SupCount = [Supervisor Count Start]
+		RETURN
+		IF(
+			ISBLANK(Losses) || ISBLANK(SupCount) || SupCount = 0,
+			BLANK(),
+			DIVIDE(Losses, SupCount, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000011-0011-0011-0011-000000000004
+
+	measure 'Span of Control Start' = 
+		VAR Supervisors = [Supervisor Count Start]
+		VAR Total = [Headcount Period Start]
+		RETURN
+		IF(
+			ISBLANK(Supervisors) || ISBLANK(Total) || Supervisors = 0,
+			BLANK(),
+			DIVIDE(Total - Supervisors, Supervisors, 0)
+		)
+		formatString: 0.0
+		lineageTag: 00000011-0011-0011-0011-000000000005
+
+	measure 'Span of Control End' = 
+		VAR Supervisors = [Supervisor Count End]
+		VAR Total = [Headcount Period End]
+		RETURN
+		IF(
+			ISBLANK(Supervisors) || ISBLANK(Total) || Supervisors = 0,
+			BLANK(),
+			DIVIDE(Total - Supervisors, Supervisors, 0)
+		)
+		formatString: 0.0
+		lineageTag: 00000011-0011-0011-0011-000000000006
+
+
+	/// ========================================================
+	/// GROUP 12: VETERANS METRICS
+	/// ========================================================
+
+	measure 'Veterans Count Start' = 
+		VAR StartDate = [Selected Period Start]
+		RETURN
+		IF(
+			ISBLANK(StartDate),
+			BLANK(),
+			CALCULATE(
+				DISTINCTCOUNT(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = StartDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No",
+				NOT(ISBLANK(FactEmployeeSnapshot[Veterans Status])),
+				FactEmployeeSnapshot[Veterans Status] <> "N",
+				FactEmployeeSnapshot[Veterans Status] <> ""
+			)
+		)
+		formatString: #,##0
+		lineageTag: 00000012-0012-0012-0012-000000000001
+
+	measure 'Veterans Count End' = 
+		VAR EndDate = [Selected Period End]
+		RETURN
+		IF(
+			ISBLANK(EndDate),
+			BLANK(),
+			CALCULATE(
+				DISTINCTCOUNT(FactEmployeeSnapshot[EmployeeKey]),
+				FactEmployeeSnapshot[SnapshotDate] = EndDate,
+				FactEmployeeSnapshot[IsStudentIntern] = "No",
+				NOT(ISBLANK(FactEmployeeSnapshot[Veterans Status])),
+				FactEmployeeSnapshot[Veterans Status] <> "N",
+				FactEmployeeSnapshot[Veterans Status] <> ""
+			)
+		)
+		formatString: #,##0
+		lineageTag: 00000012-0012-0012-0012-000000000002
+
+	measure 'Veterans Pct Start' = 
+		VAR Vets = [Veterans Count Start]
+		VAR Total = [Headcount Period Start]
+		RETURN
+		IF(
+			ISBLANK(Vets) || ISBLANK(Total) || Total = 0,
+			BLANK(),
+			DIVIDE(Vets, Total, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000012-0012-0012-0012-000000000003
+
+	measure 'Veterans Pct End' = 
+		VAR Vets = [Veterans Count End]
+		VAR Total = [Headcount Period End]
+		RETURN
+		IF(
+			ISBLANK(Vets) || ISBLANK(Total) || Total = 0,
+			BLANK(),
+			DIVIDE(Vets, Total, 0)
+		)
+		formatString: 0.0%
+		lineageTag: 00000012-0012-0012-0012-000000000004
+
+
+	/// ========================================================
+	/// GROUP 13: FORMATTING & CONDITIONAL MEASURES
+	/// ========================================================
+
+	measure 'Retention Rate Color' = 
+		VAR Rate = [Retention Rate Agency]
+		RETURN
+		SWITCH(
+			TRUE(),
+			ISBLANK(Rate), "#808080",
+			Rate >= 0.9, "#00AA00",
+			Rate >= 0.8, "#FFAA00",
+			"#CC0000"
+		)
+		lineageTag: 00000013-0013-0013-0013-000000000001
+
+	measure 'Attrition Rate Color' = 
+		VAR Rate = [Attrition Rate]
+		RETURN
+		SWITCH(
+			TRUE(),
+			ISBLANK(Rate), "#808080",
+			Rate <= 0.1, "#00AA00",
+			Rate <= 0.2, "#FFAA00",
+			"#CC0000"
+		)
+		lineageTag: 00000013-0013-0013-0013-000000000002
+
+	measure 'Headcount Trend Arrow' = 
+		VAR Change = [Headcount Change]
+		RETURN
+		SWITCH(
+			TRUE(),
+			ISBLANK(Change), "—",
+			Change > 0, "▲",
+			Change < 0, "▼",
+			"—"
+		)
+		lineageTag: 00000013-0013-0013-0013-000000000003
+
+	measure 'Retention Trend Arrow' = 
+		VAR Rate = [Retention Rate Agency]
+		VAR Target = 0.90
+		RETURN
+		SWITCH(
+			TRUE(),
+			ISBLANK(Rate), "—",
+			Rate >= Target, "▲",
+			Rate >= 0.85, "►",
+			"▼"
+		)
+		lineageTag: 00000013-0013-0013-0013-000000000004
+
+	measure 'Attrition Trend Arrow' = 
+		VAR Rate = [Attrition Rate]
+		VAR Target = 0.10
+		RETURN
+		SWITCH(
+			TRUE(),
+			ISBLANK(Rate), "—",
+			Rate <= Target, "▼",
+			Rate <= 0.15, "►",
+			"▲"
+		)
+		lineageTag: 00000013-0013-0013-0013-000000000005
+
+	measure 'Status Badge' = 
+		VAR Retention = [Retention Rate Agency]
+		VAR Attrition = [Attrition Rate]
+		RETURN
+		SWITCH(
+			TRUE(),
+			ISBLANK(Retention), "⚪ No Data",
+			Retention >= 0.95 && Attrition <= 0.05, "🟢 Excellent",
+			Retention >= 0.90 && Attrition <= 0.10, "🟢 Good",
+			Retention >= 0.85 && Attrition <= 0.15, "🟡 Watch",
+			Retention >= 0.80 && Attrition <= 0.20, "🟠 Concern",
+			"🔴 Critical"
+		)
+		lineageTag: 00000013-0013-0013-0013-000000000006
+
+	measure 'Net Change Icon' = 
+		VAR Change = [Net Change]
+		RETURN
+		SWITCH(
+			TRUE(),
+			ISBLANK(Change), "—",
+			Change > 10, "⬆️ Strong Growth",
+			Change > 0, "↗️ Growth",
+			Change = 0, "➡️ Stable",
+			Change > -10, "↘️ Decline",
+			"⬇️ Sharp Decline"
+		)
+		lineageTag: 00000013-0013-0013-0013-000000000007
+
+
+	/// ========================================================
+	/// GROUP 14: SUMMARY CARDS
+	/// ========================================================
+
+	measure 'Executive Summary' = 
+		VAR HC_Start = [Headcount Period Start]
+		VAR HC_End = [Headcount Period End]
+		VAR Retention = [Retention Rate Agency]
+		VAR Attrition = [Attrition Rate]
+		VAR Losses = [Losses Total]
+		VAR Gains = [Gains Total]
+		RETURN
+		IF(
+			[Is Valid Selection] = 0,
+			"Please select valid Period Start and Period End dates.",
+			"Workforce: " & FORMAT(HC_Start, "#,##0") & " → " & FORMAT(HC_End, "#,##0") & 
+			" | Retention: " & FORMAT(Retention, "0.0%") & 
+			" | Attrition: " & FORMAT(Attrition, "0.0%") & 
+			" | Losses: " & FORMAT(Losses, "#,##0") & 
+			" | Gains: " & FORMAT(Gains, "#,##0")
+		)
+		lineageTag: 00000014-0014-0014-0014-000000000001
+
+	measure 'KPI Summary Card' = 
+		VAR Retention = [Retention Rate Agency]
+		VAR Attrition = [Attrition Rate]
+		VAR NewHireAttr = [New Hire Attrition Rate]
+		RETURN
+		IF(
+			[Is Valid Selection] = 0,
+			"",
+			"Retention: " & FORMAT(Retention, "0.0%") & UNICHAR(10) &
+			"Attrition: " & FORMAT(Attrition, "0.0%") & UNICHAR(10) &
+			"New Hire Attrition: " & FORMAT(NewHireAttr, "0.0%")
+		)
+		lineageTag: 00000014-0014-0014-0014-000000000002
+
+
+	partition '_Measures' = m
+		mode: import
+		source =
+			let
+				Source = #table(type table [Helper = text], {})
+			in
+				Source
+
+	annotation PBI_ResultType = Table
