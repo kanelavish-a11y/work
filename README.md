@@ -1,22 +1,10 @@
-Got it. The problem is the expression: property – it is not valid in TMDL.
-For every calculated column and measure you added, you must:
-	•	Put the DAX right after the column/measure name using =
-	•	Then list dataType, summarizeBy, formatString, etc. as properties.
 
-Below are full replacement blocks for everything we added in the Employees and PersonnelActions tables.
-Copy-paste each block in place of your current custom columns/measures (from column 'Snapshot Date' down to just before the partition line for that table).
-
-⸻
-
-1. Employees – all calc columns and measures (no expression:)
-
-    // ---- existing physical columns above ----
     column 'Pers Additional Work Role 2 Desc'
         dataType: string
         summarizeBy: none
         sourceColumn: Pers Additional Work Role 2 Desc
 
-    // ==== NEW: Snapshot + calc columns ====
+
 
     column 'Snapshot Date'
         dataType: dateTime
