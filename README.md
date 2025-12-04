@@ -1,10 +1,135 @@
+Below is what you asked for:
+	•	One M replacement for the Employees partition (adds Snapshot Date correctly).
+	•	All the new calculated columns and measures for:
+	•	Employees (retention + tenure)
+	•	PersonnelActions (attrition, internal/external, movement shares, risk score)
+	•	All in TMDL syntax, with all percentages formatted as "0.0%".
 
+You will:
+	1.	Replace the partition Employees = m source = block with the new M code.
+	2.	Paste the Employees columns/measures block inside table Employees.
+	3.	Paste the PersonnelActions columns/measures block inside table PersonnelActions.
+	4.	In the Model view, set PersonnelActions[EFFECTIVE_DATE_4] to Date (if it’s still text).
+	5.	Create relationships:
+	•	Employees[ORG First 2] → OrgMAPPING[Org Code]
+	•	PersonnelActions[From ORG 2 Digit] → OrgMAPPING[Org Code].
+
+⸻
+
+1. Employees – M code (partition) with Snapshot Date
+
+Replace your existing partition Employees = m block with this:
+
+        partition Employees = m
+            mode: import
+            source =
+                    let
+                        Source =
+                            SharePoint.Files(
+                                "https://dod365.sharepoint-mil.us/teams/DISA-AttritionRetentionAutomation/",
+                                [ ApiVersion = 15 ]
+                            ),
+
+                        // Keep only the folder with snapshot files
+                        #"Filtered Rows" =
+                            Table.SelectRows(
+                                Source,
+                                each [Folder Path]
+                                    = "https://dod365.sharepoint-mil.us/teams/DISA-AttritionRetentionAutomation/Shared Documents/Attrition-Retention Automation/TEST/NewTest/"
+                            ),
+
+                        // Only DISA snapshot files (e.g. "DISA Empl Data 01 10 24.xlsx")
+                        #"Filtered Rows1" =
+                            Table.SelectRows(
+                                #"Filtered Rows",
+                                each Text.StartsWith( [Name], "DISA" )
+                            ),
+
+                        // Remove hidden files BEFORE dropping Attributes
+                        #"Filtered Hidden Files1" =
+                            Table.SelectRows(
+                                #"Filtered Rows1",
+                                each [Attributes]?[Hidden]? <> true
+                            ),
+
+                        // Add Snapshot Date from file name: "DISA Empl Data dd mm yy.xlsx"
+                        #"Added Snapshot Date" =
+                            Table.AddColumn(
+                                #"Filtered Hidden Files1",
+                                "Snapshot Date",
+                                each
+                                    let
+                                        name = [Name],
+                                        baseName = Text.BeforeDelimiter( name, "." ),
+                                        // Expected: "DISA Empl Data dd mm yy"
+                                        datePart = Text.AfterDelimiter( baseName, "DISA Empl Data " ),
+                                        parts = Text.Split( datePart, " " ),
+                                        d = Number.FromText( parts{0} ),
+                                        m = Number.FromText( parts{1} ),
+                                        yShort = Number.FromText( parts{2} ),
+                                        y =
+                                            if yShort < 50
+                                            then 2000 + yShort
+                                            else 1900 + yShort
+                                    in
+                                        #date( y, m, d ),
+                                type date
+                            ),
+
+                        // We don't need these metadata columns anymore
+                        #"Removed Columns" =
+                            Table.RemoveColumns(
+                                #"Added Snapshot Date",
+                                { "Extension", "Date accessed", "Date modified", "Date created", "Attributes", "Folder Path" }
+                            ),
+
+                        // Apply existing Transform File to Content
+                        #"Invoke Custom Function1" =
+                            Table.AddColumn(
+                                #"Removed Columns",
+                                "Transform File",
+                                each #"Transform File"( [Content] )
+                            ),
+
+                        #"Removed Other Columns1" =
+                            Table.SelectColumns(
+                                #"Invoke Custom Function1",
+                                { "Snapshot Date", "Transform File" }
+                            ),
+
+                        #"Expanded Table Column1" =
+                            Table.ExpandTableColumn(
+                                #"Removed Other Columns1",
+                                "Transform File",
+                                Table.ColumnNames( #"Transform File"( #"Sample File" ) )
+                            )
+                    in
+                        #"Expanded Table Column1"
+
+            annotation PBI_NavigationStepName = Navigation
+
+            annotation PBI_ResultType = Table
+
+
+Got it. The problem is the expression: property – it is not valid in TMDL.
+For every calculated column and measure you added, you must:
+	•	Put the DAX right after the column/measure name using =
+	•	Then list dataType, summarizeBy, formatString, etc. as properties.
+
+Below are full replacement blocks for everything we added in the Employees and PersonnelActions tables.
+Copy-paste each block in place of your current custom columns/measures (from column 'Snapshot Date' down to just before the partition line for that table).
+
+⸻
+
+1. Employees – all calc columns and measures (no expression:)
+
+    // ---- existing physical columns above ----
     column 'Pers Additional Work Role 2 Desc'
         dataType: string
         summarizeBy: none
         sourceColumn: Pers Additional Work Role 2 Desc
 
-
+    // ==== NEW: Snapshot + calc columns ====
 
     column 'Snapshot Date'
         dataType: dateTime
