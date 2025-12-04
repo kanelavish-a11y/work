@@ -59,21 +59,22 @@ Replace your existing partition Employees = m block with this:
                                 "Snapshot Date",
                                 each
                                     let
-                                        name = [Name],
-                                        baseName = Text.BeforeDelimiter( name, "." ),
-                                        // Expected: "DISA Empl Data dd mm yy"
-                                        datePart = Text.AfterDelimiter( baseName, "DISA Empl Data " ),
-                                        parts = Text.Split( datePart, " " ),
-                                        d = Number.FromText( parts{0} ),
-                                        m = Number.FromText( parts{1} ),
-                                        yShort = Number.FromText( parts{2} ),
-                                        y =
-                                            if yShort < 50
-                                            then 2000 + yShort
-                                            else 1900 + yShort
-                                    in
-                                        #date( y, m, d ),
-                                type date
+						                name     = [Name],
+						                baseName = Text.BeforeDelimiter( name, "." ),   // strip extension
+						                // expected suffix: "dd mm yy", e.g. "02 12 25"
+						                datePart = Text.Trim( Text.End( baseName, 8 ) ),
+						                parts    = Text.Split( datePart, " " ),
+						                d       = Number.FromText( parts{0} ),
+						                m       = Number.FromText( parts{1} ),
+						                yShort  = Number.FromText( parts{2} ),
+						                y       =
+													if yShort < 50 
+													then 2000 + yShort 
+													else 1900 + yShort
+            						in
+								                #date( y, m, d ),
+								type date
+								    )
                             ),
 
                         // We don't need these metadata columns anymore
