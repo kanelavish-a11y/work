@@ -1,1852 +1,388 @@
-# DISA Workforce Analytics Dashboard
-## Complete Dashboard Page Specifications
-
-**Version:** 2.0
-**Last Updated:** December 2025
-
----
-
-## Dashboard Pages Overview
-
-This document specifies the 10 core dashboard pages for the DISA Workforce Analytics solution:
-
-1. **External Movement** - Losses to Outside Agencies
-2. **Internal Movement** - Transfers Within DISA
-3. **New Hire & Tenure** - New hire retention and tenure analysis
-4. **Retention Analysis** - Employee retention patterns
-5. **Attrition Analysis** - Attrition deep dive
-6. **Executive Overview** - High-level workforce health
-7. **Exit Analysis** - "Why do people leave?"
-8. **Hiring vs Attrition** - "Are we hiring fast enough and keeping them?"
-9. **Executive Brief** - Single printable summary
-10. **Action Dashboard** - "Who owns fixing what?"
-
----
-
-## Page 1: External Movement (Losses to Outside Agencies)
-
-**Purpose:** Track employees leaving DISA for other agencies, retirement, or separation
-
-**Key Question:** Where are our people going and why?
-
-### Row 1: Key External Loss Metrics (4 Cards)
-
-1. **Agency Losses Card**
-   - Measure: `[Agency Losses]`
-   - Format: Whole number (e.g., 145)
-   - Subtitle: "Employees who left DISA"
-   - Conditional Formatting:
-     - Red if >100
-     - Yellow if 50-100
-     - Green if <50
-
-2. **External Transfer Losses Card**
-   - Measure: `[External Transfer Losses]`
-   - Format: Whole number
-   - Subtitle: "Transfers to other agencies"
-
-3. **Agency Attrition Rate Card**
-   - Measure: `[Agency Attrition Rate]`
-   - Format: Percentage (1 decimal: 8.5%)
-   - Subtitle: vs `[Total Attrition Rate]` (shows difference)
-   - Conditional Formatting:
-     - Green if <8%
-     - Yellow if 8-12%
-     - Red if >12%
-
-4. **Voluntary Losses Card**
-   - Measure: `[Voluntary Losses]`
-   - Format: Whole number
-   - Subtitle: "Retirements, resignations"
-
-### Row 2: Destination Analysis (3 Visuals)
-
-1. **Top Destination Agencies (Bar Chart)**
-   - Y-Axis: `'KW DISA Personnel Actions'[Destination Agency]`
-   - X-Axis: `[External Transfer Losses]`
-   - Sort: Descending
-   - Top N: 10
-   - Data Labels: On
-   - Color: Single color (#E74C3C - Red)
-   - **Purpose:** Shows which agencies are attracting DISA employees
-
-2. **External Loss Trend (Line + Column Combo)**
-   - X-Axis: `Date_Actions[Date]` (monthly)
-   - Column: `[External Transfer Losses]`
-   - Line: `[Agency Attrition Rate]`
-   - Dual Axis
-   - Colors:
-     - Column: #E74C3C (Red)
-     - Line: #34495E (Dark Gray)
-   - **Purpose:** Shows seasonality and trends
-
-3. **Loss Type Breakdown (Donut Chart)**
-   - Legend: Categories
-     - Voluntary Losses
-     - Non-Voluntary Losses
-     - Retirement (if available)
-   - Values: Respective measures
-   - Colors:
-     - Voluntary: #F39C12 (Orange)
-     - Non-Voluntary: #C0392B (Dark Red)
-   - Data Labels: Count and %
-   - **Purpose:** Shows why people are leaving
-
-### Row 3: Detailed Analysis (2 Tables)
-
-1. **External Losses by Organization (Matrix)**
-   - Rows: `Employees[Org]`
-   - Values:
-     - `[External Transfer Losses]`
-     - `[Agency Attrition Rate]`
-     - `[Voluntary Losses]`
-     - `[Non-Voluntary Losses]`
-     - `[Top Destination External]`
-   - Conditional Formatting: On all rate columns
-   - Sort: Descending by External Transfer Losses
-   - **Purpose:** Identifies high-loss organizations
-
-2. **External Movement Detail Table**
-   - Rows: `'KW DISA Personnel Actions'[Destination Agency]`
-   - Values:
-     - `[External Transfer Losses]`
-     - Average Tenure at Loss (calculated)
-     - Most Common Occupation Series
-     - Loss Trend (arrow indicator)
-   - Sort: Descending by count
-   - **Purpose:** Deep dive into each destination
-
-### Slicers
-- Date Range (between dates)
-- Organization (dropdown)
-- Center (dropdown)
-- Destination Agency (multi-select)
-- Vol/Non-Vol (button toggle)
-
-### Drillthrough Configuration
-**Enable drillthrough on these visuals:**
-1. **External Losses by Organization (Matrix)** → Org Deep Dive
-   - Drillthrough field: `Employees[ORG]`
-2. **Top Destination Agencies (Bar Chart)** → No drillthrough (external data)
-
-### Tooltip Assignments
-| Visual | Tooltip Page |
-|--------|--------------|
-| Agency Attrition Rate Card | Tooltip 1: Attrition Deep Dive |
-| External Loss Trend (Line + Column) | Tooltip 1: Attrition Deep Dive |
-| Loss Type Breakdown (Donut) | Tooltip 6: External Loss Context |
-| External Losses by Organization (Matrix) | Tooltip 1: Attrition Deep Dive |
-| Top Destination Agencies (Bar Chart) | Tooltip 6: External Loss Context |
-
-### Key Insights
-- "Which agencies are our biggest competitors?"
-- "Are we losing experienced or new employees externally?"
-- "What's the trend - improving or worsening?"
-
----
-
-## Page 2: Internal Movement (Transfers Within DISA)
-
-**Purpose:** Track employee transfers between DISA organizations
-
-**Key Question:** How are employees moving within DISA?
-
-### Row 1: Internal Transfer Metrics (5 Cards)
-
-1. **Internal Transfer Losses Card**
-   - Measure: `[Internal Transfer Losses]`
-   - Format: Whole number
-   - Subtitle: "Left their org for another DISA org"
-
-2. **Internal Transfers In Card**
-   - Measure: `[Internal Transfers In (Org)]`
-   - Format: Whole number
-   - Subtitle: "Joined from other DISA orgs"
-
-3. **Net Internal Transfers Card**
-   - Measure: `[Net Internal Transfers (Org)]`
-   - Format: Whole number with +/- sign
-   - Conditional Formatting:
-     - Green if positive (net gainer)
-     - Red if negative (net loser)
-   - Subtitle: "Net gain/loss from internal transfers"
-
-4. **Internal Mobility Rate Card**
-   - Measure: `[Internal Mobility Rate]`
-   - Format: Percentage (1 decimal)
-   - Subtitle: "% of workforce transferring internally"
-
-5. **Top Gainer Org Card**
-   - Measure: `[Top Gainer Internal]`
-   - Format: Text (Org name)
-   - Subtitle: "Org attracting most internal transfers"
-
-### Row 2: Transfer Flow Analysis (2 Visuals)
-
-1. **Internal Transfer Flow (Sankey Diagram)**
-   - Source: `'KW DISA Personnel Actions'[From Org]`
-   - Destination: `'KW DISA Personnel Actions'[To Org]`
-   - Value: `[Internal Transfer Losses]`
-   - Filter: Only show flows >5 transfers
-   - Colors: By source org
-   - **Purpose:** Visualizes org-to-org transfer patterns
-   - **User Interaction:** Click source/destination to filter
-
-2. **Net Flow by Organization (Bar Chart)**
-   - Y-Axis: `OrgMapping[Org]`
-   - X-Axis: `[Net Internal Transfers (Org)]`
-   - Sort: Descending (show gainers at top)
-   - Center Line: 0
-   - Colors:
-     - Positive (gainers): #27AE60 (Green)
-     - Negative (losers): #E74C3C (Red)
-   - Data Labels: On
-   - **Purpose:** Quickly identifies org winners and losers
-
-### Row 3: Transfer Details (3 Visuals)
-
-1. **Transfer In/Out Comparison (Clustered Column)**
-   - X-Axis: `OrgMapping[Org]`
-   - Y-Axis:
-     - `[Internal Transfers Out (Org)]` (Red)
-     - `[Internal Transfers In (Org)]` (Green)
-   - Data Labels: On
-   - Legend: Bottom
-   - **Purpose:** Side-by-side comparison per org
-
-2. **Top Destination for Internal Transfers (Table)**
-   - Columns:
-     - From Org
-     - To Org
-     - Transfer Count
-     - % of From Org's losses
-   - Sort: Descending by Transfer Count
-   - Top N: 20
-   - **Purpose:** Shows specific transfer patterns
-
-3. **Internal Transfer Trend (Line Chart)**
-   - X-Axis: `Date_Actions[Date]` (monthly)
-   - Y-Axis:
-     - `[Internal Transfer Losses]`
-     - `[Internal Transfers In (Org)]`
-   - Colors: Distinct
-   - **Purpose:** Shows transfer activity over time
-
-### Slicers
-- Date Range (between dates)
-- From Organization (dropdown)
-- To Organization (dropdown)
-- Center (dropdown)
-- NOA Code (multi-select for 501, 570, 702, 721)
-
-### Drillthrough Configuration
-**Enable drillthrough on these visuals:**
-1. **Internal Transfer Flow (Sankey Diagram)** → Org Deep Dive
-   - Drillthrough field: `'KW DISA Personnel Actions'[From Org]` (source)
-   - Also enable: `'KW DISA Personnel Actions'[To Org]` (destination)
-2. **Net Flow by Organization (Bar Chart)** → Org Deep Dive
-   - Drillthrough field: `OrgMapping[Org]`
-3. **Transfer In/Out Comparison (Clustered Column)** → Org Deep Dive
-   - Drillthrough field: `OrgMapping[Org]`
-
-### Tooltip Assignments
-| Visual | Tooltip Page |
-|--------|--------------|
-| Internal Mobility Rate Card | Tooltip 4: Movement Analysis |
-| Internal Transfer Flow (Sankey) | Tooltip 9: Sankey Flow Details |
-| Net Flow by Organization (Bar Chart) | Tooltip 4: Movement Analysis |
-| Transfer In/Out Comparison (Clustered Column) | Tooltip 4: Movement Analysis |
-| Internal Transfer Trend (Line Chart) | Tooltip 4: Movement Analysis |
-
-### Key Insights
-- "Which orgs are losing people to internal transfers?"
-- "Which orgs are best at attracting internal talent?"
-- "What are the common transfer pathways?"
-
----
-
-## Page 3: New Hire & Tenure
-
-**Purpose:** Analyze new hire retention and workforce tenure composition
-
-**Key Question:** Are we successfully onboarding and retaining new hires?
-
-### Row 1: New Hire Metrics (5 Cards)
-
-1. **Total Hires Card**
-   - Measure: `[Total Hires]`
-   - Format: Whole number
-   - Subtitle: "Employees hired in period"
-
-2. **New Hire On-Hand Card**
-   - Measure: `[New Hire On-Hand]`
-   - Format: Whole number
-   - Subtitle: "Employees with <2 years tenure"
-
-3. **New Hire % Card**
-   - Measure: `[New Hire %]`
-   - Format: Percentage (1 decimal)
-   - Subtitle: "% of workforce"
-   - Conditional Formatting:
-     - Yellow if >30% (high turnover concern)
-     - Green if 15-30%
-     - Red if <15% (aging workforce)
-
-4. **New Hire Attrition Rate Card**
-   - Measure: `[New Hire Attrition Rate]`
-   - Format: Percentage (1 decimal)
-   - Subtitle: "Attrition rate for <2 year employees"
-   - Conditional Formatting:
-     - Red if >20%
-     - Yellow if 15-20%
-     - Green if <15%
-
-5. **New Hire Losses Card**
-   - Measure: `[New Hire Losses]`
-   - Format: Whole number
-   - Subtitle: "New hires who left"
-
-### Row 2: Tenure Analysis (3 Visuals)
-
-1. **Tenure Distribution (Bar Chart)**
-   - X-Axis: Tenure buckets
-     - 0-2 Years
-     - 2-5 Years
-     - 5-10 Years
-     - 10-20 Years
-     - 20+ Years
-   - Y-Axis:
-     - `[Tenure 0-2 Years]`
-     - `[Tenure 2-5 Years]`
-     - `[Tenure 5-10 Years]`
-     - `[Tenure 10-20 Years]`
-     - `[Tenure 20+ Years]`
-   - Colors: Sequential blues (#DCEEF3 to #003B5C)
-   - Data Labels: Count and percentage
-   - **Purpose:** Shows workforce age distribution
-
-2. **Average Tenure Trend (Line Chart)**
-   - X-Axis: `Employees[Snapshot Date]`
-   - Y-Axis: `[Avg Tenure (Current)]`
-   - Reference Line: Overall average
-   - Color: #2C3E50 (Dark Blue)
-   - Data Labels: Latest value only
-   - **Purpose:** Shows if workforce is aging or rejuvenating
-
-3. **Tenure Mix Over Time (Stacked Area Chart)**
-   - X-Axis: `Employees[Snapshot Date]`
-   - Y-Axis: Count of employees in each tenure bucket
-   - Legend: Tenure categories
-   - Colors: Sequential
-   - **Purpose:** Shows composition changes over time
-
-### Row 3: New Hire Deep Dive (3 Visuals)
-
-1. **New Hire Retention Funnel (Funnel Chart)**
-   - Stages:
-     - Total Hires (period)
-     - Still Employed at 6 months
-     - Still Employed at 12 months
-     - Still Employed at 24 months
-   - Values: Calculate using hire date filters
-   - Show percentages
-   - **Purpose:** Visualizes new hire attrition journey
-
-2. **New Hire Losses by Organization (Matrix)**
-   - Rows: `Employees[Org]`
-   - Values:
-     - `[Total Hires]`
-     - `[New Hire On-Hand]`
-     - `[New Hire Losses]`
-     - `[New Hire Attrition Rate]`
-     - `[New Hire %]`
-   - Conditional Formatting: On all rate columns
-   - Sort: Descending by New Hire Attrition Rate
-   - **Purpose:** Identifies orgs with new hire retention problems
-
-3. **Hiring vs New Hire Loss Trend (Line + Column)**
-   - X-Axis: `Date_Actions[Date]` (monthly)
-   - Column: `[Total Hires]` (Green)
-   - Line: `[New Hire Losses]` (Red)
-   - Gap visualization
-   - **Purpose:** Shows if new hires are staying or leaving quickly
-
-### Slicers
-- Date Range (between dates)
-- Organization (dropdown)
-- Center (dropdown)
-- Tenure Bucket (multi-select)
-- Hire Year (dropdown)
-
-### Drillthrough Configuration
-**Enable drillthrough on these visuals:**
-1. **Tenure Distribution (Bar Chart)** → No drillthrough (aggregate data)
-2. **New Hire Losses by Organization (Matrix)** → Org Deep Dive
-   - Drillthrough field: `Employees[Org]`
-3. **Average Tenure Trend (Line Chart)** → No drillthrough (time series)
-
-### Tooltip Assignments
-| Visual | Tooltip Page |
-|--------|--------------|
-| New Hire On-Hand Card | Tooltip 2: Headcount Context |
-| New Hire Attrition Rate Card | Tooltip 1: Attrition Deep Dive |
-| Tenure Distribution (Bar Chart) | Tooltip 5: Tenure Profile |
-| Average Tenure Trend (Line Chart) | Tooltip 5: Tenure Profile |
-| Tenure Mix Over Time (Stacked Area) | Tooltip 5: Tenure Profile |
-| New Hire Retention Funnel | Tooltip 7: Hiring Activity |
-| New Hire Losses by Organization (Matrix) | Tooltip 1: Attrition Deep Dive |
-| Hiring vs New Hire Loss Trend | Tooltip 7: Hiring Activity |
-
-### Key Insights
-- "What % of new hires leave within first 2 years?"
-- "Is our workforce getting older or younger?"
-- "Which orgs struggle with new hire retention?"
-
----
-
-## Page 4: Retention Analysis
-
-**Purpose:** Focus on retention patterns across different levels
-
-**Key Question:** How well are we retaining employees?
-
-### Row 1: Retention Metrics (5 Cards)
-
-1. **Retention Rate Card**
-   - Measure: `[Retention Rate]`
-   - Format: Percentage (1 decimal: 86.8%)
-   - Conditional Formatting:
-     - Green if >92%
-     - Yellow if 88-92%
-     - Red if <88%
-   - Subtitle: vs Prior Period
-
-2. **Retention Rate (Same Org) Card**
-   - Measure: `[Retention Rate (Same Org)]`
-   - Format: Percentage (1 decimal)
-   - Subtitle: "Stayed in same org"
-
-3. **Retention Rate (Same Series) Card**
-   - Measure: `[Retention Rate (Same Series)]`
-   - Format: Percentage (1 decimal)
-   - Subtitle: "Stayed in same job series"
-
-4. **Remain Count Card**
-   - Measure: `[Remain Count]`
-   - Format: Whole number
-   - Subtitle: "Employees retained from start"
-
-5. **Stability Index Card**
-   - Measure: `[Stability Index]`
-   - Format: Percentage (0 decimals: 68%)
-   - Conditional Formatting:
-     - Green if >70%
-     - Yellow if 60-70%
-     - Red if <60%
-   - Subtitle: "Composite stability score"
-
-### Row 2: Retention Breakdown (3 Charts)
-
-1. **Retention by Organization (Bar Chart)**
-   - Y-Axis: `Employees[Org]`
-   - X-Axis: `[Retention Rate]`
-   - Reference Line: 92% target
-   - Sort: Ascending (show lowest retention first)
-   - Color: Conditional
-     - Red if <88%
-     - Yellow if 88-92%
-     - Green if >92%
-   - Data Labels: On
-   - **Purpose:** Identifies problem orgs
-
-2. **Retention Funnel (Funnel Chart)**
-   - Stages (top to bottom):
-     - OnHand Start: `[OnHand Start]`
-     - Remain at DISA: `[Remain Count]`
-     - Remain Same Org: `[Remain Same Org Count]`
-     - Remain Same Center: `[Remain Same Center Count]`
-     - Remain Same Series: `[Remain Same Series Count]`
-     - Remain Same Center & Series: `[Remain Same Center Same Series Count]`
-   - Values: Respective measures
-   - Show percentages
-   - **Purpose:** Shows retention at each strictness level
-
-3. **Retention Trend (Line Chart)**
-   - X-Axis: `Employees[Snapshot Date]`
-   - Y-Axis:
-     - `[Retention Rate]` (Primary - Dark Green)
-     - `[Retention Rate (Same Org)]` (Medium Green)
-     - `[Retention Rate (Same Center Same Series)]` (Light Green)
-   - Colors: Sequential greens
-   - Data Labels: Latest period only
-   - **Purpose:** Shows retention trends over time
-
-### Row 3: Movement & Retention Detail (2 Visuals + 1 Matrix)
-
-1. **Internal Movement Impact (Stacked Column)**
-   - X-Axis: `Employees[Org]`
-   - Y-Axis (stacked):
-     - `[Remain Same Org Count]` (Dark Green)
-     - `[Promotion Count]` (Blue)
-     - `[Lateral Move Count]` (Orange)
-     - `[Internal Transfer Losses]` (Yellow)
-   - Colors: Distinct
-   - Legend: Bottom
-   - **Purpose:** Shows how employees move within DISA
-
-2. **Retention vs Tenure (Scatter Plot)**
-   - X-Axis: `[Avg Tenure (Current)]`
-   - Y-Axis: `[Retention Rate]`
-   - Bubble Size: `[OnHand End]`
-   - Legend: `Employees[Org]`
-   - Reference Lines:
-     - Vertical: Overall avg tenure
-     - Horizontal: 92% retention target
-   - **Purpose:** Shows relationship between tenure and retention
-
-3. **Retention Detail Matrix**
-   - Rows: `Employees[Org]`, `Employees[Center]`
-   - Values:
-     - `[OnHand Start]`
-     - `[Remain Count]`
-     - `[Retention Rate]`
-     - `[Remain Same Org Count]`
-     - `[Retention Rate (Same Org)]`
-     - `[Lost from Start Org Count]`
-     - `[Promotion Rate]`
-     - `[Internal Mobility Rate]`
-   - Conditional Formatting: All rate columns
-   - Sort: Ascending by Retention Rate
-   - **Purpose:** Detailed retention metrics per org
-
-### Slicers
-- Date Range (between dates)
-- Organization (dropdown)
-- Center (dropdown)
-- Tenure Bucket (multi-select)
-- Series Table filter
-
-### Drillthrough Configuration
-**Enable drillthrough on these visuals:**
-1. **Retention by Organization (Bar Chart)** → Org Deep Dive
-   - Drillthrough field: `Employees[Org]`
-2. **Retention vs Tenure (Scatter Plot)** → Org Deep Dive
-   - Drillthrough field: `Employees[Org]` (bubble legend)
-3. **Retention Detail Matrix** → Org Deep Dive (Org level), Center Deep Dive (Center level)
-   - Drillthrough fields: `Employees[Org]` and `Employees[Center]`
-
-### Tooltip Assignments
-| Visual | Tooltip Page |
-|--------|--------------|
-| Retention Rate Card | Tooltip 3: Retention Insights |
-| Retention Rate (Same Org) Card | Tooltip 3: Retention Insights |
-| Retention Rate (Same Series) Card | Tooltip 3: Retention Insights |
-| Remain Count Card | Tooltip 3: Retention Insights |
-| Retention by Organization (Bar Chart) | Tooltip 3: Retention Insights |
-| Retention Funnel | Tooltip 3: Retention Insights |
-| Retention Trend (Line Chart) | Tooltip 3: Retention Insights |
-| Internal Movement Impact (Stacked Column) | Tooltip 4: Movement Analysis |
-| Retention vs Tenure (Scatter Plot) | Tooltip 8: Benchmark Comparison |
-| Retention Detail Matrix | Tooltip 3: Retention Insights |
-
-### Key Insights
-- "Which orgs have the lowest retention?"
-- "How many employees change orgs but stay at DISA?"
-- "Is retention improving or declining?"
-
----
-
-## Page 5: Attrition Analysis
-
-**Purpose:** Deep dive into attrition patterns
-
-**Key Question:** Why is attrition happening and where?
-
-### Row 1: Attrition Metrics (5 Cards)
-
-1. **Total Losses Card**
-   - Measure: `[Total Losses]`
-   - Format: Whole number
-   - Subtitle: "Employees who left their org"
-
-2. **Attrition Rate Card**
-   - Measure: `[Attrition Rate]`
-   - Format: Percentage (1 decimal: 13.2%)
-   - Conditional Formatting:
-     - Red if >12%
-     - Yellow if 8-12%
-     - Green if <8%
-   - Subtitle: vs Prior Period `[Attrition Rate Change (pp)]`
-
-3. **Voluntary Attrition Rate Card**
-   - Measure: `[Voluntary Attrition Rate]`
-   - Format: Percentage (1 decimal)
-   - Subtitle: "Resignations, retirements"
-
-4. **Non-Voluntary Attrition Rate Card**
-   - Measure: `[Non-Voluntary Attrition Rate]`
-   - Format: Percentage (1 decimal)
-   - Subtitle: "Terminations, removals"
-
-5. **New Hire Attrition Rate Card**
-   - Measure: `[New Hire Attrition Rate]`
-   - Format: Percentage (1 decimal)
-   - Subtitle: "Attrition for <2 year employees"
-
-### Row 2: Attrition Breakdown Charts (3 Charts)
-
-1. **Attrition by Organization (Column Chart)**
-   - X-Axis: `Employees[Org]`
-   - Y-Axis: `[Attrition Rate]`
-   - Reference Line: 12% (Red dashed)
-   - Sort: Descending
-   - Color: Conditional by value
-     - Red if >12%
-     - Yellow if 8-12%
-     - Green if <8%
-   - Data Labels: On
-   - **Purpose:** Identifies high-attrition orgs
-
-2. **Attrition by Tenure Cohort (Column Chart)**
-   - X-Axis: Tenure categories
-     - 0-2 Years
-     - 2-5 Years
-     - 5-10 Years
-     - 10-20 Years
-     - 20+ Years
-   - Y-Axis: Attrition rate for each cohort
-     - Calculate as: Losses in cohort / Avg cohort size
-   - Color: By value (gradient red)
-   - Data Labels: On
-   - **Purpose:** Shows which tenure groups have highest attrition
-
-3. **Attrition Trend with Velocity (Combo Chart)**
-   - X-Axis: `Employees[Snapshot Date]`
-   - Column: `[Attrition Velocity]` (change from prior period)
-   - Line 1: `[Attrition Rate]` (Red solid)
-   - Line 2: `[Rolling 6-Period Avg Attrition]` (Gray dashed)
-   - Dual Axis
-   - **Purpose:** Shows trend direction and acceleration
-
-### Row 3: Detail Tables (2 Tables)
-
-1. **Top Attrition Organizations (Matrix)**
-   - Rows: `Employees[Org]`
-   - Values:
-     - `[OnHand End]`
-     - `[Total Losses]`
-     - `[Attrition Rate]`
-     - `[Attrition Rate Change (pp)]`
-     - `[Voluntary Losses]`
-     - `[Non-Voluntary Losses]`
-     - `[New Hire Losses]`
-   - Conditional Formatting:
-     - Attrition Rate (heat scale)
-     - Change (pp) (red/green arrows)
-   - Sort: Descending by Attrition Rate
-   - Top N: 15
-   - **Purpose:** Comprehensive attrition metrics per org
-
-2. **Attrition Risk Assessment (Table)**
-   - Rows: `Employees[Org]`
-   - Columns:
-     - `[Attrition Risk Score]`
-     - `[Risk Category]` (High/Medium/Low)
-     - `[Attrition Rate]` (Current)
-     - Trend Direction (arrow from velocity)
-     - `[New Hire Attrition Rate]`
-     - `[Retention Risk (Experienced)]`
-   - Conditional Formatting:
-     - Risk Score (Red >70, Yellow 41-70, Green <41)
-     - Risk Category (color coded)
-   - Sort: Descending by Risk Score
-   - **Purpose:** Prioritizes orgs needing attention
-
-### Slicers
-- Date Range (between dates)
-- Organization (dropdown)
-- Center (dropdown)
-- Vol/Non-Vol (button toggle)
-- Tenure Bucket (multi-select)
-
-### Drillthrough Configuration
-**Enable drillthrough on these visuals:**
-1. **Attrition by Organization (Column Chart)** → Org Deep Dive
-   - Drillthrough field: `Employees[Org]`
-2. **Top Attrition Organizations (Matrix)** → Org Deep Dive
-   - Drillthrough field: `Employees[Org]`
-3. **Attrition Risk Assessment (Table)** → Org Deep Dive
-   - Drillthrough field: `Employees[Org]`
-
-### Tooltip Assignments
-| Visual | Tooltip Page |
-|--------|--------------|
-| Attrition Rate Card | Tooltip 1: Attrition Deep Dive |
-| Voluntary Attrition Rate Card | Tooltip 1: Attrition Deep Dive |
-| Non-Voluntary Attrition Rate Card | Tooltip 1: Attrition Deep Dive |
-| New Hire Attrition Rate Card | Tooltip 1: Attrition Deep Dive |
-| Attrition by Organization (Column Chart) | Tooltip 1: Attrition Deep Dive |
-| Attrition by Tenure Cohort (Column Chart) | Tooltip 1: Attrition Deep Dive |
-| Attrition Trend with Velocity (Combo Chart) | Tooltip 1: Attrition Deep Dive |
-| Top Attrition Organizations (Matrix) | Tooltip 1: Attrition Deep Dive |
-| Attrition Risk Assessment (Table) | Tooltip 10: Risk Indicator Details |
-
-### Key Insights
-- "Which orgs have the highest attrition?"
-- "Is attrition accelerating or slowing?"
-- "Are new hires or experienced employees leaving more?"
-
----
-
-## Page 6: Executive Overview
-
-**Purpose:** High-level workforce health dashboard
-
-**Key Question:** How is DISA's workforce doing overall?
-
-### Row 1: Key Metrics Cards (4 Cards Across)
-
-1. **Attrition Rate Card**
-   - Measure: `[Attrition Rate]`
-   - Format: 13.2%
-   - Conditional Formatting:
-     - Red if >12%
-     - Yellow if 8-12%
-     - Green if <8%
-   - Subtitle: vs Prior Period `[Attrition Rate Change (pp)]`
-   - Trend Indicator: Arrow (up/down/flat)
-
-2. **Retention Rate Card**
-   - Measure: `[Retention Rate]`
-   - Format: 86.8%
-   - Conditional Formatting:
-     - Green if >92%
-     - Yellow if 88-92%
-     - Red if <88%
-   - Subtitle: vs Prior Period `[Retention Rate Change (pp)]`
-   - Trend Indicator: Arrow
-
-3. **Net Headcount Change Card**
-   - Measure: `[Net Headcount Change]`
-   - Format: -45 (show +/- sign)
-   - Conditional Formatting:
-     - Green if positive
-     - Red if negative
-     - Yellow if 0
-   - Subtitle: From `[OnHand Start]` to `[OnHand End]`
-
-4. **Attrition Risk Score Card**
-   - Measure: `[Attrition Risk Score]`
-   - Format: 68
-   - Conditional Formatting:
-     - Red if 71-100
-     - Yellow if 41-70
-     - Green if 0-40
-   - Subtitle: `[Risk Category]` (High/Medium/Low)
-   - Icon: Based on risk level
-
-### Row 2: Trend Charts (2 Charts)
-
-1. **Attrition & Retention Trend (Line Chart)**
-   - X-Axis: `Employees[Snapshot Date]`
-   - Y-Axis:
-     - `[Attrition Rate]` (#E74C3C - Red)
-     - `[Retention Rate]` (#27AE60 - Green)
-     - `[Rolling 3-Period Avg Attrition]` (#95A5A6 - Gray, dashed)
-   - Data Labels: On for latest period only
-   - Legend: Bottom
-   - Reference Lines:
-     - Attrition: 12% target (red dashed)
-     - Retention: 92% target (green dashed)
-   - **Purpose:** Shows main KPI trends
-
-2. **Headcount Movement (Waterfall Chart)**
-   - Categories:
-     - OnHand Start: `[OnHand Start]`
-     - Total Hires: `[Total Hires]`
-     - Total Losses: `[Total Losses]`
-     - Net Change: `[Net Headcount Change]`
-     - OnHand End: `[OnHand End]`
-   - Colors:
-     - Start/End: #3498DB (Blue)
-     - Hires: #27AE60 (Green)
-     - Losses: #E74C3C (Red)
-     - Net Change: Conditional (green if +, red if -)
-   - Data Labels: On all bars
-   - **Purpose:** Shows how headcount changed
-
-### Row 3: Breakdowns (3 Visuals)
-
-1. **Attrition by Organization (Bar Chart)**
-   - Y-Axis: `Employees[Org]`
-   - X-Axis: `[Attrition Rate]`
-   - Sort: Descending by Attrition Rate
-   - Color: Conditional by value
-   - Data Labels: On
-   - Top N: 10
-   - Reference Line: 12%
-   - **Purpose:** Quick view of high-attrition orgs
-
-2. **Tenure Distribution (Donut Chart)**
-   - Legend: Tenure categories
-   - Values:
-     - `[Tenure 0-2 Years]` (20-40% ideally)
-     - `[Tenure 2-5 Years]`
-     - `[Tenure 5-10 Years]`
-     - `[Tenure 10-20 Years]`
-     - `[Tenure 20+ Years]`
-   - Colors: Sequential blues (#DCEEF3 to #003B5C)
-   - Data Labels: Count and percentage
-   - **Purpose:** Shows workforce age composition
-
-3. **Voluntary vs Non-Voluntary (Stacked Bar)**
-   - Y-Axis: Single bar (100% stacked)
-   - X-Axis:
-     - `[Voluntary Losses]`
-     - `[Non-Voluntary Losses]`
-   - Colors:
-     - Voluntary: #F39C12 (Orange)
-     - Non-Voluntary: #C0392B (Dark Red)
-   - Data Labels: Count and percentage
-   - **Purpose:** Shows loss type breakdown
-
-### Slicers (Always Visible)
-- Date Range (between dates) - Prominent
-- Organization (dropdown)
-- Center (dropdown)
-
-### Drillthrough Configuration
-**Enable drillthrough on these visuals:**
-1. **Attrition by Organization (Bar Chart)** → Org Deep Dive
-   - Drillthrough field: `Employees[Org]`
-2. **Headcount Movement (Waterfall Chart)** → No drillthrough (aggregate summary)
-
-### Tooltip Assignments
-| Visual | Tooltip Page |
-|--------|--------------|
-| Attrition Rate Card | Tooltip 1: Attrition Deep Dive |
-| Retention Rate Card | Tooltip 3: Retention Insights |
-| Net Headcount Change Card | Tooltip 2: Headcount Context |
-| Attrition Risk Score Card | Tooltip 10: Risk Indicator Details |
-| Attrition & Retention Trend (Line Chart) | Tooltip 8: Benchmark Comparison |
-| Headcount Movement (Waterfall Chart) | Tooltip 2: Headcount Context |
-| Attrition by Organization (Bar Chart) | Tooltip 1: Attrition Deep Dive |
-| Tenure Distribution (Donut Chart) | Tooltip 5: Tenure Profile |
-| Voluntary vs Non-Voluntary (Stacked Bar) | Tooltip 6: External Loss Context |
-
-### Key Insights
-- "Is workforce health improving or declining?"
-- "Where should leadership focus attention?"
-- "What's driving our attrition rate?"
-
----
-
-## Page 7: Exit Analysis – "Why do people leave?"
-
-**Purpose:** Detailed loss analysis and exit patterns
-
-**Key Question:** What are the reasons people are leaving?
-
-### Row 1: Exit Metrics (4 Cards)
-
-1. **Total Losses Card**
-   - Measure: `[Total Losses]`
-   - Format: Whole number
-   - Subtitle: "Employees who left"
-
-2. **Voluntary % Card**
-   - Measure: DIVIDE([Voluntary Losses], [Total Losses], 0)
-   - Format: Percentage (0 decimals: 73%)
-   - Subtitle: "Of total losses"
-
-3. **Non-Voluntary % Card**
-   - Measure: DIVIDE([Non-Voluntary Losses], [Total Losses], 0)
-   - Format: Percentage (0 decimals: 27%)
-   - Subtitle: "Of total losses"
-
-4. **Top Exit Destination Card**
-   - Measure: `[Top Destination External]`
-   - Format: Text (Agency name)
-   - Subtitle: "Most common destination"
-
-### Row 2: Exit Reason Analysis (3 Visuals)
-
-1. **Loss Type Breakdown (Treemap)**
-   - Groups: NOA Category hierarchy
-     - Voluntary
-       - Retirement
-       - Resignation
-       - Other Voluntary
-     - Non-Voluntary
-       - Termination
-       - Removal
-       - Other Non-Voluntary
-   - Values: Loss count from `'KW DISA Personnel Actions'`
-   - Tooltips: Show NOA descriptions
-   - Colors: Diverging (green for voluntary, red for non-voluntary)
-   - **Purpose:** Visual breakdown of all exit types
-
-2. **Exit Reasons Detail (Waterfall)**
-   - Start: Total Losses
-   - Categories (cascading down):
-     - Retirement
-     - Resignation
-     - Transfer to Another Agency
-     - Termination/Removal
-     - Other
-   - End: 0
-   - Colors: Categorical
-   - Data Labels: Count and % of total
-   - **Purpose:** Shows composition of exits
-
-3. **Exit Timing Analysis (Line Chart)**
-   - X-Axis: `'KW DISA Personnel Actions'[EFFECTIVE_DATE_4]` (by month)
-   - Y-Axis: Count of losses
-   - Multiple Lines:
-     - Total Losses (Black)
-     - Voluntary Losses (Orange)
-     - Non-Voluntary Losses (Red)
-   - **Purpose:** Shows seasonality and patterns
-   - **Insight:** Do people leave more at certain times of year?
-
-### Row 3: Exit Demographics & Patterns (3 Visuals)
-
-1. **Exit Demographics Matrix**
-   - Rows: Various dimensions
-     - Org
-     - Center
-     - Occupation Series
-     - Tenure Bucket
-   - Values:
-     - `[Total Losses]`
-     - % of Total Losses
-     - Attrition rate for that demographic
-     - Most common exit reason (NOA)
-   - Conditional Formatting: On loss counts
-   - **Purpose:** Shows who is leaving
-
-2. **Tenure at Exit (Column Chart)**
-   - X-Axis: Tenure buckets
-   - Y-Axis: Count of losses in each bucket
-   - Color: By bucket
-   - Data Labels: On
-   - Annotation: Show which bucket has highest losses
-   - **Purpose:** Are we losing new hires or experienced employees?
-
-3. **Exit Destination Analysis (Table)**
-   - Rows: `'KW DISA Personnel Actions'[Destination Agency]`
-   - Columns:
-     - Count of transfers
-     - % of external transfers
-     - Average tenure of those who left
-     - Most common source org
-     - Most common occupation series
-   - Sort: Descending by count
-   - Top N: 15
-   - **Purpose:** Deep dive into where people go
-
-### Slicers
-- Date Range (between dates)
-- Organization (dropdown)
-- Vol/Non-Vol (button toggle)
-- NOA Category (multi-select)
-- Destination Agency (multi-select)
-
-### Drillthrough Configuration
-**Enable drillthrough on these visuals:**
-1. **Exit Demographics Matrix** → Org Deep Dive (org level), Center Deep Dive (center level), Series Deep Dive (series level)
-   - Drillthrough fields: `Employees[Org]`, `Employees[Center]`, `Series[Tittle]`
-2. **Tenure at Exit (Column Chart)** → No drillthrough (aggregate tenure data)
-3. **Exit Destination Analysis (Table)** → No drillthrough (external destination)
-
-### Tooltip Assignments
-| Visual | Tooltip Page |
-|--------|--------------|
-| Total Losses Card | Tooltip 6: External Loss Context |
-| Voluntary % Card | Tooltip 6: External Loss Context |
-| Non-Voluntary % Card | Tooltip 6: External Loss Context |
-| Loss Type Breakdown (Treemap) | Tooltip 6: External Loss Context |
-| Exit Reasons Detail (Waterfall) | Tooltip 6: External Loss Context |
-| Exit Timing Analysis (Line Chart) | Tooltip 6: External Loss Context |
-| Exit Demographics Matrix | Tooltip 6: External Loss Context |
-| Tenure at Exit (Column Chart) | Tooltip 5: Tenure Profile |
-| Exit Destination Analysis (Table) | Tooltip 6: External Loss Context |
-
-### Key Insights
-- "What's the #1 reason people leave?"
-- "Are exits voluntary or forced?"
-- "Which agencies are attracting our employees?"
-- "Do losses spike at certain times of year?"
-
----
-
-## Page 8: Hiring vs Attrition – "Are we hiring fast enough and keeping them?"
-
-**Purpose:** Hiring effectiveness and replacement analysis
-
-**Key Question:** Can we hire fast enough to replace losses and grow?
-
-### Row 1: Hiring & Loss Balance Metrics (5 Cards)
-
-1. **Total Hires Card**
-   - Measure: `[Total Hires]`
-   - Format: Whole number
-   - Subtitle: "External hires in period"
-
-2. **Total Losses Card**
-   - Measure: `[Total Losses]`
-   - Format: Whole number
-   - Subtitle: "Org-level losses"
-
-3. **Net Headcount Change Card**
-   - Measure: `[Net Headcount Change]`
-   - Format: Whole number with +/- sign
-   - Conditional Formatting:
-     - Green if positive
-     - Red if negative
-   - Subtitle: Hires minus Losses
-
-4. **Replacement Pipeline Ratio Card**
-   - Measure: `[Replacement Pipeline Ratio]`
-   - Format: Decimal (1 decimal: 1.2)
-   - Conditional Formatting:
-     - Green if ≥1.0
-     - Red if <1.0
-   - Subtitle: "Hires per loss (target: ≥1.0)"
-   - **Explanation:** 1.0 = replacing losses, >1.0 = growing
-
-5. **Hiring Demand (12mo) Card**
-   - Measure: `[Hiring Demand (12mo)]`
-   - Format: Whole number
-   - Subtitle: "Projected hires needed"
-
-### Row 2: Hire vs Loss Comparison (3 Visuals)
-
-1. **Hire vs Loss Comparison (Line Chart)**
-   - X-Axis: `Date_Actions[Date]` (monthly)
-   - Y-Axis:
-     - `[Total Hires]` (#27AE60 - Green)
-     - `[Total Losses]` (#E74C3C - Red)
-     - `[Net Headcount Change]` (#3498DB - Blue)
-   - Area fill between Hires and Losses:
-     - Green when Hires > Losses
-     - Red when Losses > Hires
-   - Data Labels: Latest period only
-   - **Purpose:** Shows if hiring keeps pace with attrition
-
-2. **Replacement Pipeline Trend (Combo Chart)**
-   - X-Axis: `Date_Actions[Date]` (monthly)
-   - Column: `[Net Headcount Change]` (Conditional color)
-   - Line: `[Replacement Pipeline Ratio]`
-   - Reference Line: 1.0 (target)
-   - Dual Axis
-   - **Purpose:** Shows pipeline health over time
-
-3. **Projected Need (Gauge)**
-   - Value: `[Replacement Pipeline Ratio]`
-   - Target: 1.0
-   - Range: 0 to 2.0
-   - Color Bands:
-     - Red: 0 to 0.8
-     - Yellow: 0.8 to 1.0
-     - Green: 1.0 to 2.0
-   - **Purpose:** At-a-glance pipeline status
-
-### Row 3: New Hire Retention Journey (3 Visuals)
-
-1. **New Hire Retention Funnel**
-   - Stages (example for 2024 cohort):
-     - Hired in 2024: Count from hire data
-     - Retained 6 months: Filter to hires still employed 6mo later
-     - Retained 12 months: Filter to hires still employed 12mo later
-     - Retained 24 months: Filter to hires still employed 24mo later
-   - Values: Counts at each stage
-   - Show percentages and drop-off
-   - **Purpose:** Visualizes new hire attrition journey
-   - **Calculation Note:** Need to track cohorts over time
-
-2. **Hiring vs New Hire Loss (Column Chart)**
-   - X-Axis: `Date_Actions[Date]` (monthly)
-   - Columns:
-     - `[Total Hires]` (Green)
-     - `[New Hire Losses]` (Red)
-   - Clustered columns side-by-side
-   - Data Labels: On
-   - **Purpose:** Shows if new hires are staying or leaving quickly
-
-3. **Hiring Demand Forecast (Column + Line)**
-   - X-Axis: Time period (historical + next 12 months)
-   - Column: `[Hiring Demand (12mo)]` (Future periods)
-   - Line: `[Total Hires]` (Historical)
-   - Gap visualization between forecast and trend
-   - Annotation: "Need to hire X more per month"
-   - **Purpose:** Shows hiring gap
-
-### Row 4: Detailed Analysis (1 Matrix)
-
-**Hiring & Attrition Matrix by Organization**
-- Rows: `Employees[Org]`
-- Values:
-  - `[Total Hires]`
-  - `[Total Losses]`
-  - `[Net Headcount Change]`
-  - `[Replacement Pipeline Ratio]`
-  - `[OnHand Start]`
-  - `[OnHand End]`
-  - `[Attrition Rate]`
-  - `[New Hire Attrition Rate]`
-- Conditional Formatting:
-  - Net Change (red/green)
-  - Pipeline Ratio (red if <1.0, green if ≥1.0)
-  - Attrition rates (heat scale)
-- Sort: Descending by Attrition Rate
-- **Purpose:** Comprehensive hiring/attrition view per org
-
-### Slicers
-- Date Range (between dates)
-- Organization (dropdown)
-- Center (dropdown)
-- Hire Year (for cohort analysis)
-
-### Drillthrough Configuration
-**Enable drillthrough on these visuals:**
-1. **Hiring & Attrition Matrix by Organization** → Org Deep Dive
-   - Drillthrough field: `Employees[Org]`
-2. **Hire vs Loss Comparison (Line Chart)** → No drillthrough (time series)
-
-### Tooltip Assignments
-| Visual | Tooltip Page |
-|--------|--------------|
-| Total Hires Card | Tooltip 7: Hiring Activity |
-| Total Losses Card | Tooltip 6: External Loss Context |
-| Net Headcount Change Card | Tooltip 2: Headcount Context |
-| Replacement Pipeline Ratio Card | Tooltip 7: Hiring Activity |
-| Hire vs Loss Comparison (Line Chart) | Tooltip 7: Hiring Activity |
-| Replacement Pipeline Trend (Combo Chart) | Tooltip 7: Hiring Activity |
-| Projected Need (Gauge) | Tooltip 7: Hiring Activity |
-| New Hire Retention Funnel | Tooltip 7: Hiring Activity |
-| Hiring vs New Hire Loss (Column Chart) | Tooltip 7: Hiring Activity |
-| Hiring Demand Forecast (Column + Line) | Tooltip 7: Hiring Activity |
-| Hiring & Attrition Matrix by Organization | Tooltip 8: Benchmark Comparison |
-
-### Key Insights
-- "Are we hiring fast enough to replace losses?"
-- "What % of new hires stay past 1 year?"
-- "Which orgs need more hiring support?"
-- "What's our projected hiring need for next year?"
-
----
-
-## Page 9: Executive Brief – Single Printable Summary
-
-**Purpose:** One-page executive summary (print-ready)
-
-**Key Question:** What do executives need to know in 30 seconds?
-
-**Layout:** Fixed layout, no scrolling, optimized for printing
-
-### Top Section: Overall Health (3 Large KPIs)
-
-**Layout:** Horizontal cards across top (33% width each)
-
-1. **Attrition Rate**
-   - Measure: `[Attrition Rate]`
-   - Format: 13.2%
-   - Font: Large (48pt)
-   - Status Icon:
-     - ✓ Green circle if <8%
-     - ⚠ Yellow triangle if 8-12%
-     - ✗ Red X if >12%
-   - Subtitle: "vs Prior: +1.3pp" (with arrow)
-   - Background: Light gray box
-
-2. **Retention Rate**
-   - Measure: `[Retention Rate]`
-   - Format: 86.8%
-   - Font: Large (48pt)
-   - Status Icon: Same logic as above
-   - Subtitle: "vs Prior: -2.1pp"
-   - Background: Light gray box
-
-3. **Net Headcount Change**
-   - Measure: `[Net Headcount Change]`
-   - Format: -45 (with +/- sign)
-   - Font: Large (48pt)
-   - Color: Green if +, Red if -
-   - Subtitle: "Start: 2,450 → End: 2,405"
-   - Background: Light gray box
-
-### Middle Left: Top 3 Risks (40% width)
-
-**Title:** "Highest Risk Organizations"
-
-**Visual:** Table (auto-filtered to top 3 by Risk Score)
-- Rows: `Employees[Org]` (Top 3)
-- Columns:
-  - Org Name
-  - `[Attrition Risk Score]` (large, color-coded)
-  - Key Driver (text field)
-    - Example: "High new hire attrition"
-    - Could be calculated field showing max of: new hire rate, experienced rate, velocity
-- Conditional Formatting:
-  - Risk score background (red gradient)
-- Font: Medium size for readability
-- Borders: Clean, professional
-
-### Middle Center: Key Trend (30% width)
-
-**Title:** "6-Month Attrition Trend"
-
-**Visual:** Small line chart
-- X-Axis: Last 6 periods
-- Y-Axis: `[Attrition Rate]`
-- Color: Red
-- Reference Line: 12% target
-- Minimal gridlines
-- Large data label on latest point
-- Arrow showing direction:
-  - ↑ Red if increasing
-  - → Yellow if flat
-  - ↓ Green if decreasing
-
-### Middle Right: Snapshot (30% width)
-
-**Title:** "Quick Stats"
-
-**Visual:** Simple KPI list (no visuals, just numbers)
-- Total Workforce: `[OnHand End]`
-- Total Losses: `[Total Losses]`
-- Total Hires: `[Total Hires]`
-- New Hire %: `[New Hire %]`
-- Avg Tenure: `[Avg Tenure (Current)]` years
-
-Font: Clean, medium size
-Alignment: Right-aligned numbers
-
-### Bottom Section: 12-Month Outlook (Full width)
-
-**Title:** "12-Month Outlook"
-
-**Layout:** Horizontal 3-column section
-
-**Column 1: Projected Headcount**
-- Measure: `[Projected Headcount Change (12mo)]`
-- Format: +/- number
-- Font: Medium
-- Label: "Expected Change"
-
-**Column 2: Hiring Need**
-- Measure: `[Hiring Demand (12mo)]`
-- Format: Whole number
-- Font: Medium
-- Label: "Hires Needed"
-
-**Column 3: Risk Assessment**
-- Measure: `[Attrition Risk Score]`
-- Format: Text based on score
-  - "High Risk" (Red) if >70
-  - "Moderate Risk" (Yellow) if 41-70
-  - "Low Risk" (Green) if ≤40
-- Font: Medium, bold
-- Background: Color-coded box
-
-### Footer
-
-**Date Context:**
-- Period: [Start Snapshot Date] to [End Snapshot Date]
-- Generated: Today's date
-- Footer text: "DISA Workforce Analytics - Executive Summary"
-
-### Color Scheme
-**Professional & Print-Friendly:**
-- Primary: Navy #003B5C
-- Secondary: Gray #7F8C8D
-- Success: Green #27AE60
-- Warning: Orange #F39C12
-- Alert: Red #E74C3C
-- Background: White #FFFFFF
-- Subtle Gray: #ECF0F1
-
-### Slicers
-**None** - Uses default date filter only
-- Optional: One date range slicer at very top
-- Kept minimal for clean print layout
-
-### Drillthrough Configuration
-**No drillthrough on this page**
-- This page is designed for printing and executive summary
-- All information is intentionally kept on one page
-- For detailed analysis, users should navigate to other dashboard pages
-
-### Tooltip Assignments
-**No tooltips on this page**
-- Print-optimized layout doesn't benefit from tooltips
-- All key information is displayed directly on the page
-- Keeps the page clean and printer-friendly
-
-### Key Insights
-- Designed for C-suite and senior leadership
-- Answers: "Are we okay? What needs attention?"
-- Can be printed and shared in meetings
-- No drill-through needed - all info on one page
-
----
-
-## Page 10: Action Dashboard – "Who owns fixing what?"
-
-**Purpose:** Track improvement initiatives and ownership
-
-**Key Question:** What actions are being taken to address workforce issues?
-
-### Row 1: Action Summary Cards (4 Cards)
-
-1. **High Risk Orgs Card**
-   - Measure: Count of orgs with `[Attrition Risk Score] > 70`
-   - Format: Whole number
-   - Subtitle: "Organizations needing attention"
-   - Color: Red
-
-2. **Actions In Progress Card**
-   - Measure: Count from manual "Status" field = "In Progress"
-   - Format: Whole number
-   - Subtitle: "Active interventions"
-   - Color: Orange
-
-3. **Improved Orgs Card**
-   - Measure: Count of orgs with risk score decrease >10 points
-   - Format: Whole number
-   - Subtitle: "Organizations showing improvement"
-   - Color: Green
-
-4. **Average Risk Score Card**
-   - Measure: AVERAGE of `[Attrition Risk Score]` across all orgs
-   - Format: Whole number (0-100)
-   - Conditional Formatting:
-     - Red if >60
-     - Yellow if 40-60
-     - Green if <40
-   - Subtitle: "Overall risk level"
-
-### Row 2: High-Risk Organizations (Full-width Table)
-
-**Title:** "High-Risk Organizations & Action Plan"
-
-**Visual:** Detailed matrix/table
-
-**Rows:** `Employees[Org]` filtered to Risk Score > 70 OR manually tagged
-
-**Columns:**
-1. **Org** - Organization name
-2. **Risk Score** - `[Attrition Risk Score]`
-   - Conditional formatting: Color scale (white to red)
-3. **Trend** - Arrow indicator
-   - ↑ Red if increasing (compare to prior period)
-   - → Yellow if flat
-   - ↓ Green if decreasing
-4. **Key Metric to Improve** - Calculated field showing biggest issue
-   - Logic:
-     - If `[New Hire Attrition Rate] > 20%` → "New Hire Retention"
-     - Else if `[Attrition Rate] > 15%` → "Overall Attrition"
-     - Else if `[Retention Risk (Experienced)] > 70` → "Experienced Retention"
-     - Else → "Monitor"
-5. **Current Value** - Shows the value of key metric
-   - Example: "New Hire Attrition: 24.5%"
-6. **Recommended Action** - Manual text field (editable)
-   - Examples:
-     - "Conduct stay interviews with new hires"
-     - "Review onboarding process"
-     - "Assess compensation competitiveness"
-     - "Manager training on retention"
-7. **Owner** - Manual text field (editable)
-   - Dropdown of names/roles
-   - Examples: "HR Director", "Org Manager", "CAM Lead"
-8. **Status** - Manual dropdown field (editable)
-   - Values:
-     - "Not Started" (Red)
-     - "In Progress" (Yellow)
-     - "Completed" (Green)
-     - "On Hold" (Gray)
-9. **Last Updated** - Date field (manual or auto-updated)
-
-**Formatting:**
-- Alternating row colors for readability
-- Conditional formatting on Risk Score and Trend
-- Borders between rows
-- Freeze first column for scrolling
-
-**Interactivity:**
-- Click org to filter other visuals
-- Can sort by any column
-- Export to Excel functionality
-
-### Row 3: Progress Tracking (3 Visuals)
-
-1. **Risk Score Trend (Line Chart)**
-   - **Title:** "Risk Score Progress Over Time"
-   - X-Axis: Month
-   - Y-Axis: `[Attrition Risk Score]`
-   - Multiple Lines: One per tracked org (from above table)
-   - Filter: Only show orgs marked for tracking
-   - Reference Line: 70 (High Risk threshold)
-   - Colors: Unique per org
-   - Data Labels: Latest value only
-   - **Purpose:** Shows if interventions are working
-
-2. **Improvement Ranking (Bar Chart)**
-   - **Title:** "Biggest Improvements (Last 6 Months)"
-   - Y-Axis: `Employees[Org]`
-   - X-Axis: Risk Score Change (current vs 6 months ago)
-   - Sort: Descending by improvement (most improved at top)
-   - Color:
-     - Green bars for improvement (negative change)
-     - Red bars for worsening (positive change)
-   - Data Labels: Show point change
-   - **Purpose:** Celebrates wins and flags new problems
-
-3. **Action Status Breakdown (Donut Chart)**
-   - **Title:** "Action Plan Status"
-   - Legend: Status categories
-   - Values: Count of actions in each status
-     - Not Started
-     - In Progress
-     - Completed
-     - On Hold
-   - Colors:
-     - Not Started: #E74C3C (Red)
-     - In Progress: #F39C12 (Orange)
-     - Completed: #27AE60 (Green)
-     - On Hold: #95A5A6 (Gray)
-   - Data Labels: Count and %
-   - **Purpose:** Shows action plan progress
-
-### Row 4: Detail Analysis (1 Visual)
-
-**Org Deep Dive (Matrix - Drill-through destination)**
-- Rows: Selected Org (single org when clicked from table)
-- Columns: Time periods (monthly)
-- Values:
-  - `[Attrition Risk Score]`
-  - `[Attrition Rate]`
-  - `[Retention Rate]`
-  - `[Total Losses]`
-  - `[New Hire Attrition Rate]`
-- Conditional Formatting: All columns
-- Sparklines: Show mini trends
-- **Purpose:** Monthly detail for deep dive
-
-### Slicers
-- Date Range (between dates)
-- Organization (multi-select) - for filtering tracked orgs
-- Status (multi-select) - filter by action status
-- Owner (multi-select) - filter by responsible person
-
-### Data Requirements
-
-**Manual Fields Needed:**
-Create a separate "Action Tracking" table with columns:
-- Org (links to Employees[Org])
-- Recommended Action (text)
-- Owner (text)
-- Status (dropdown: Not Started, In Progress, Completed, On Hold)
-- Last Updated (date)
-- Target Completion Date (date)
-- Notes (text, optional)
-
-**Relationship:**
-- Action Tracking[Org] → Employees[Org] (many-to-one)
-
-**How it Works:**
-1. Users manually populate Action Tracking table
-2. Dashboard pulls actions for each org
-3. Can track multiple actions per org
-4. Updates status as actions progress
-
-### Key Insights
-- "Which orgs need immediate attention?"
-- "Who is responsible for addressing each issue?"
-- "Are our interventions working?"
-- "Which orgs have improved the most?"
-
-### Drillthrough Configuration
-**Enable drillthrough on these visuals:**
-1. **High-Risk Organizations & Action Plan (Table)** → Org Deep Dive
-   - Drillthrough field: `Employees[Org]`
-2. **Risk Score Trend (Line Chart)** → Org Deep Dive
-   - Drillthrough field: Org (from legend/series)
-3. **Improvement Ranking (Bar Chart)** → Org Deep Dive
-   - Drillthrough field: `Employees[Org]`
-4. **Org Deep Dive (Matrix)** → No further drillthrough (already at detail level)
-
-### Tooltip Assignments
-| Visual | Tooltip Page |
-|--------|--------------|
-| High Risk Orgs Card | Tooltip 10: Risk Indicator Details |
-| Average Risk Score Card | Tooltip 10: Risk Indicator Details |
-| High-Risk Organizations & Action Plan (Table) | Tooltip 10: Risk Indicator Details |
-| Risk Score Trend (Line Chart) | Tooltip 10: Risk Indicator Details |
-| Improvement Ranking (Bar Chart) | Tooltip 10: Risk Indicator Details |
-| Action Status Breakdown (Donut) | No tooltip (simple status breakdown) |
-| Org Deep Dive (Matrix) | Tooltip 8: Benchmark Comparison |
-
-### Best Practices
-- Review weekly in leadership meetings
-- Update statuses regularly
-- Add new orgs as they become high-risk
-- Archive completed actions quarterly
-- Use for accountability and tracking
-
----
-
-## Global Slicer Panel (All Pages)
-
-**Recommendation:** Create a bookmark/navigation panel visible on all pages
-
-### Standard Slicers
-1. **Date Range Slicer**
-   - Type: Between (From/To dates)
-   - Default: Last full year
-   - Position: Top of every page
-   - Sync: Across all pages
-
-2. **Organization Slicer**
-   - Type: Dropdown (single select)
-   - Source: `Employees[Org]` or `OrgMapping[Org]`
-   - Default: (All)
-   - Position: Left side panel or top bar
-   - Sync: Across all pages
-
-3. **Center Slicer**
-   - Type: Dropdown (single select)
-   - Source: `Employees[Center]`
-   - Default: (All)
-   - Position: Left side panel or top bar
-   - Sync: Across all pages
-
-### Optional Slicers (Page-Specific)
-4. **Vol/Non-Vol Toggle**
-   - Pages: External Movement, Exit Analysis, Attrition Analysis
-   - Type: Button/Chiclet slicer
-   - Values: Voluntary, Non-Voluntary, (All)
-
-5. **Tenure Bucket Slicer**
-   - Pages: New Hire & Tenure, Attrition Analysis
-   - Type: Multi-select dropdown
-   - Values: 0-2, 2-5, 5-10, 10-20, 20+
-
-6. **Destination Agency Slicer**
-   - Pages: External Movement, Exit Analysis
-   - Type: Multi-select dropdown
-   - Values: All destination agencies
-
-### Navigation Panel
-- Page tabs or buttons for quick navigation
-- Highlight current page
-- Consider icons for each page
-- Fixed position (left sidebar recommended)
-
----
-
-## Design Guidelines
-
-### Color Palette
-**Primary Colors:**
-- Navy: #003B5C (Headers, primary elements)
-- Light Blue: #3498DB (Accents, interactive elements)
-- White: #FFFFFF (Backgrounds)
-- Light Gray: #ECF0F1 (Secondary backgrounds)
-
-**Data Colors:**
-- Success/Positive: #27AE60 (Green)
-- Warning/Caution: #F39C12 (Orange)
-- Alert/Negative: #E74C3C (Red)
-- Neutral: #7F8C8D (Gray)
-- Info: #3498DB (Blue)
-
-**Sequential Palettes:**
-- Blues: #DCEEF3 → #003B5C (for tenure)
-- Greens: #D4EFDF → #196F3D (for retention)
-- Reds: #FADBD8 → #A93226 (for attrition)
-
-### Typography
-- **Headers:** Segoe UI Bold, 16-18pt
-- **KPI Values:** Segoe UI Bold, 36-48pt
-- **Labels:** Segoe UI, 10-11pt
-- **Data Labels:** Segoe UI, 9-10pt
-
-### Conditional Formatting Standards
-
-**Attrition Rate:**
-- Green: <8%
-- Yellow: 8-12%
-- Red: >12%
-
-**Retention Rate:**
-- Green: >92%
-- Yellow: 88-92%
-- Red: <88%
-
-**Risk Score:**
-- Green (Low): 0-40
-- Yellow (Medium): 41-70
-- Red (High): 71-100
-
-**Trend Indicators:**
-- ↑ Red - Worsening
-- → Yellow - Flat
-- ↓ Green - Improving
-
-### Visual Best Practices
-1. **Limit visuals per page:** 6-8 maximum
-2. **Use white space:** Don't overcrowd
-3. **Consistent sizing:** Align visual edges
-4. **Data labels:** Only on key values, not every data point
-5. **Tooltips:** Add rich tooltips with additional context
-6. **Mobile optimization:** Ensure key metrics visible on mobile
-
-### Accessibility
-- High contrast between text and background
-- Don't rely solely on color (use icons/shapes too)
-- Alt text for all visuals
-- Font size minimum 10pt
-- Test in high contrast mode
-
----
-
-## Implementation Priority
-
-### Phase 1: Core Pages (Weeks 1-2)
-1. Executive Overview
-2. Attrition Analysis
-3. Retention Analysis
-
-### Phase 2: Movement Analysis (Weeks 3-4)
-4. External Movement
-5. Internal Movement
-6. New Hire & Tenure
-
-### Phase 3: Leadership Pages (Week 5)
-7. Executive Brief
-8. Hiring vs Attrition
-
-### Phase 4: Deep Dive (Week 6)
-9. Exit Analysis
-10. Action Dashboard
-
----
-
-## Testing Checklist
-
-For each page, verify:
-- [ ] All measures load correctly
-- [ ] Slicers sync across pages
-- [ ] Conditional formatting applies correctly
-- [ ] Tooltips show accurate data
-- [ ] Visuals respond to filters
-- [ ] Export to PDF/PowerPoint works
-- [ ] Mobile view is readable
-- [ ] Performance is acceptable (<3 second load)
-- [ ] No error messages
-- [ ] Data labels are visible and accurate
-
----
-
-## Drillthrough & Tooltip Integration Summary
-
-### Drillthrough Strategy Overview
-
-**Primary Drillthrough Pages:**
-1. **Org Deep Dive** - Most commonly used; accessible from org-level visuals across Pages 1-10
-2. **Center Deep Dive** - Accessible from center-level visuals on Pages 4 and 7
-3. **Series Deep Dive** - Accessible from series-level visuals on Page 7
-
-**Drillthrough Usage by Dashboard Page:**
-
-| Dashboard Page | Drillthrough Enabled | Target Pages |
-|----------------|---------------------|--------------|
-| 1. External Movement | Yes | Org Deep Dive |
-| 2. Internal Movement | Yes | Org Deep Dive |
-| 3. New Hire & Tenure | Yes | Org Deep Dive |
-| 4. Retention Analysis | Yes | Org Deep Dive, Center Deep Dive |
-| 5. Attrition Analysis | Yes | Org Deep Dive |
-| 6. Executive Overview | Yes | Org Deep Dive |
-| 7. Exit Analysis | Yes | Org Deep Dive, Center Deep Dive, Series Deep Dive |
-| 8. Hiring vs Attrition | Yes | Org Deep Dive |
-| 9. Executive Brief | No | N/A (print-optimized) |
-| 10. Action Dashboard | Yes | Org Deep Dive |
-
-**Total Drillthrough-Enabled Visuals:** 28 visuals across 9 pages
-
-**User Interaction Pattern:**
-1. User views main dashboard page
-2. Right-clicks on org/center/series data point in visual
-3. Selects "Drillthrough to [Page Name]" from context menu
-4. Drillthrough page opens with filter applied to selected dimension
-5. User clicks back button to return to source page
-
----
-
-### Tooltip Strategy Overview
-
-**Tooltip Pages Available:**
-1. **Tooltip 1: Attrition Deep Dive** - 12-month trend, vol/non-vol breakdown, comparisons
-2. **Tooltip 2: Headcount Context** - Waterfall, tenure mix, comparisons
-3. **Tooltip 3: Retention Insights** - Retention breakdown, trends, risk indicators
-4. **Tooltip 4: Movement Analysis** - Promotions, laterals, transfers, career mobility
-5. **Tooltip 5: Tenure Profile** - Cohort distribution, risks by tenure
-6. **Tooltip 6: External Loss Context** - Loss types, exit reasons, trends
-7. **Tooltip 7: Hiring Activity** - Hiring sources, new hire retention, hiring vs losses
-8. **Tooltip 8: Benchmark Comparison** - Performance vs agency average/targets
-9. **Tooltip 9: Sankey Flow Details** - Transfer composition, timing, series breakdown
-10. **Tooltip 10: Risk Indicator Details** - Risk factors, trends, recommended actions
-
-**Tooltip Usage by Dashboard Page:**
-
-| Dashboard Page | Tooltip Pages Used | Total Tooltips |
-|----------------|-------------------|----------------|
-| 1. External Movement | 1, 6 | 5 visuals |
-| 2. Internal Movement | 4, 9 | 5 visuals |
-| 3. New Hire & Tenure | 1, 2, 5, 7 | 8 visuals |
-| 4. Retention Analysis | 3, 4, 8 | 10 visuals |
-| 5. Attrition Analysis | 1, 10 | 9 visuals |
-| 6. Executive Overview | 1, 2, 3, 5, 6, 10 | 9 visuals |
-| 7. Exit Analysis | 5, 6 | 9 visuals |
-| 8. Hiring vs Attrition | 2, 6, 7, 8 | 11 visuals |
-| 9. Executive Brief | None | 0 (print-optimized) |
-| 10. Action Dashboard | 8, 10 | 6 visuals |
-
-**Total Tooltip-Enabled Visuals:** 72 visuals across 9 pages
-
-**Design Principle:**
-- Tooltips provide **contextual insights** without cluttering the main visual
-- Show **trends**, **breakdowns**, or **comparisons** not visible in the main chart
-- Keep tooltips **concise** (400x300px typical) and **fast-loading** (<1 second)
-- Use tooltips to **reduce on-screen clutter** while maintaining information richness
-
----
-
-### Implementation Workflow
-
-**Step 1: Create Drillthrough Pages**
-1. Build Org Deep Dive page ([DRILLTHROUGH_PAGES_SPECIFICATION.md](DRILLTHROUGH_PAGES_SPECIFICATION.md))
-2. Build Center Deep Dive page
-3. Build Series Deep Dive page
-4. Configure drillthrough fields on each page
-5. Test drillthrough navigation and back button
-
-**Step 2: Create Tooltip Pages**
-1. Build all 10 tooltip pages ([TOOLTIP_PAGES_SPECIFICATION.md](TOOLTIP_PAGES_SPECIFICATION.md))
-2. Set canvas size to Tooltip type
-3. Enable "Allow use as tooltip" in page settings
-4. Optimize visuals for fast loading
-
-**Step 3: Build Main Dashboard Pages**
-1. Build all 10 dashboard pages (this document)
-2. Configure visuals according to specifications
-
-**Step 4: Apply Drillthrough**
-1. For each visual listed in "Drillthrough Configuration" sections:
-   - Open visual Format pane → Drillthrough
-   - Enable "Allow using drillthrough on this visual"
-   - Set target drillthrough pages
-   - Configure drillthrough fields
-2. Test right-click drillthrough from each visual
-
-**Step 5: Apply Tooltips**
-1. For each visual listed in "Tooltip Assignments" tables:
-   - Open visual Format pane → Tooltip
-   - Set Type: "Report page"
-   - Select appropriate tooltip page from dropdown
-2. Test hover interaction for each visual
-3. Verify tooltip data matches hovered element
-
-**Step 6: Testing**
-- [ ] All 28 drillthrough-enabled visuals navigate correctly
-- [ ] Back button returns to correct source page
-- [ ] All 72 tooltip-enabled visuals show correct tooltip page
-- [ ] Tooltips display correct data for hovered element
-- [ ] Tooltips load within 1 second
-- [ ] Drillthrough pages respect filter context
-- [ ] Multi-level drillthrough works (main → org → series)
-
----
-
-### User Experience Design
-
-**Progressive Disclosure Strategy:**
-
-**Level 1: Main Visual** (Quick glance)
-- High-level metric or trend
-- Example: "Attrition Rate: 12.5%"
-
-**Level 2: Tooltip** (Hover for context)
-- Breakdown, trend, or comparison
-- Example: Tooltip shows 12-month trend, vol vs non-vol split, comparison to average
-- **Interaction:** Hover over visual
-
-**Level 3: Drillthrough** (Deep dive analysis)
-- Comprehensive analysis for selected entity
-- Example: Full org analysis with 10+ visuals showing all metrics
-- **Interaction:** Right-click → Drillthrough
-
-**Layering Benefits:**
-- Reduces visual clutter on main pages
-- Provides information on-demand
-- Supports different user needs (executive vs analyst)
-- Maintains performance (tooltips/drillthrough load only when needed)
-
----
-
-### Maintenance & Updates
-
-**Quarterly Review:**
-1. **Drillthrough Pages:**
-   - Verify all measures still calculate correctly
-   - Update Top N filters if org structure changes
-   - Add new visuals if user feedback requests
-   - Check page load performance
-
-2. **Tooltip Pages:**
-   - Validate tooltip load times (<1 second)
-   - Update comparison benchmarks (agency averages)
-   - Refresh conditional formatting thresholds
-   - Test tooltips after any data model changes
-
-3. **Dashboard Pages:**
-   - Review tooltip assignments - are users finding them helpful?
-   - Check if any new visuals need tooltips or drillthrough
-   - Validate that drillthrough fields still match data model
-   - Update documentation if pages change
-
-**When Data Model Changes:**
-- [ ] Validate all drillthrough fields still exist
-- [ ] Test drillthrough navigation end-to-end
-- [ ] Check tooltip filter context (ensure tooltips show correct data)
-- [ ] Verify relationships support drillthrough/tooltip filtering
-
-**User Feedback Loop:**
-- Track which drillthrough pages are most used (Power BI usage metrics)
-- Survey users: "Are tooltips helpful or distracting?"
-- Iterate on tooltip content based on user requests
-- Add new drillthrough pages if specific deep dives are frequently requested
-
----
-
-## End of Dashboard Specifications
-
-**Related Documentation:**
-- **Measure Definitions:** [COMPLETE_IMPLEMENTATION_GUIDE.md](COMPLETE_IMPLEMENTATION_GUIDE.md)
-- **Quick-Copy DAX Measures:** [ALL_MEASURES_QUICK_COPY.md](ALL_MEASURES_QUICK_COPY.md)
-- **Drillthrough Pages:** [DRILLTHROUGH_PAGES_SPECIFICATION.md](DRILLTHROUGH_PAGES_SPECIFICATION.md)
-- **Tooltip Pages:** [TOOLTIP_PAGES_SPECIFICATION.md](TOOLTIP_PAGES_SPECIFICATION.md)
-- **Data Model & Relationships:** COMPLETE_IMPLEMENTATION_GUIDE.md Section 2
-
-**Implementation Order:**
-1. Build all 78 DAX measures (ALL_MEASURES_QUICK_COPY.md)
-2. Validate measures with test data
-3. Create drillthrough pages (DRILLTHROUGH_PAGES_SPECIFICATION.md)
-4. Create tooltip pages (TOOLTIP_PAGES_SPECIFICATION.md)
-5. Build main dashboard pages (this document)
-6. Apply drillthrough configurations
-7. Apply tooltip assignments
-8. Test end-to-end user workflows
-9. Deploy to production
+Below is a consolidated implementation that includes all of the Power Query M code for your key tables (Snapshots, Org Mapping, Personnel Actions and Date) followed by DAX measures for attrition, retention and the advanced statistics. You can paste each section into the Advanced Editor of its respective query in Power BI Desktop and then define the DAX measures in the model.
+
+⸻
+
+✅ Power Query M Code
+
+1. Snapshots query (appends all quarterly snapshot files)
+
+let
+    // Connect to the folder containing all snapshot files
+    Source = Folder.Files("C:\\Data\\DISA_Snapshots"),
+    Filtered = Table.SelectRows(Source, each Text.StartsWith([Name], "DISA Empl Data")),
+
+    // Extract snapshot date from file name "DISA Empl Data dd Mmm yy.xlsx"
+    AddSnapshotDate = Table.AddColumn(Filtered, "SnapshotDate", each
+        let
+            DateString = Text.Trim(Text.Middle([Name], 15, 9)), // "01 Oct 24"
+            DayPart   = Text.Start(DateString, 2),
+            MonthPart = Text.Middle(DateString, 3, 3),
+            YearPart  = Text.End(DateString, 2),
+            ParsedDate = Date.FromText(DayPart & " " & MonthPart & " 20" & YearPart)
+        in
+            ParsedDate
+    ),
+
+    // Expand each workbook into a unified table
+    AddWorkbook = Table.AddColumn(AddSnapshotDate, "Data", each Excel.Workbook([Content], true)),
+    ExpandWB = Table.ExpandTableColumn(AddWorkbook, "Data", {"Data"}, {"Data"}),
+    ExpandSheet = Table.ExpandTableColumn(ExpandWB, "Data", {"Data"}, {"SheetData"}),
+    ExpandRows = Table.ExpandTableColumn(ExpandSheet, "SheetData", Table.ColumnNames(ExpandSheet{0}[SheetData])),
+
+    // Cast important fields
+    ChangedTypes = Table.TransformColumnTypes(
+        ExpandRows,
+        {
+            {"DoD ID (EDIPI)", type text},
+            {"Org Structure ID", type text},
+            {"Title", type text},
+            {"Occ Series Current", type text},
+            {"Manpower PCN", type text},
+            {"ServiceStartDate", type date},     // adjust to your actual column names
+            {"DateOfBirth", type date}           // adjust to your actual column names
+        }
+    ),
+
+    // Derive the two‑character org code
+    AddOrgFirst2 = Table.AddColumn(ChangedTypes, "OrgFirst2", each Text.Start([Org Structure ID], 2), type text),
+
+    // Merge in org hierarchy from DimOrg
+    MergedOrg = Table.NestedJoin(AddOrgFirst2, {"OrgFirst2"}, DimOrg, {"Org"}, "OrgDetails", JoinKind.LeftOuter),
+    ExpandedOrg = Table.ExpandTableColumn(MergedOrg, "OrgDetails", {"Center","Org Code","CAM ID"}, {"Center","Org Code","CAM ID"}),
+
+    // Flag students/interns
+    AddStudentIntern = Table.AddColumn(
+        ExpandedOrg,
+        "StudentIntern",
+        each
+            let
+                titleCheck = Text.Contains(Text.Lower([Title]), "student"),
+                seriesCheck = Text.EndsWith(Text.From([Occ Series Current]), "99"),
+                pcn = [Manpower PCN]
+            in
+                if (titleCheck or seriesCheck) and not (Text.Contains(pcn, "RG") or Text.Contains(pcn, "VT"))
+                then 1 else 0,
+        Int64.Type
+    ),
+
+    // Tenure (years) and age (years)
+    AddTenure = Table.AddColumn(
+        AddStudentIntern,
+        "TenureYears",
+        each Number.RoundDown(Duration.Days([SnapshotDate] - [ServiceStartDate]) / 365, 2),
+        type number
+    ),
+    AddAge = Table.AddColumn(
+        AddTenure,
+        "AgeYears",
+        each Number.RoundDown(Duration.Days([SnapshotDate] - [DateOfBirth]) / 365, 2),
+        type number
+    ),
+
+    // Tenure and age brackets
+    AddTenureBracket = Table.AddColumn(
+        AddAge,
+        "TenureBracket",
+        each
+            if [TenureYears] < 1 then "<1 year"
+            else if [TenureYears] < 3 then "1–2 years"
+            else if [TenureYears] < 5 then "3–4 years"
+            else if [TenureYears] < 10 then "5–9 years"
+            else "10+ years",
+        type text
+    ),
+    AddAgeBracket = Table.AddColumn(
+        AddTenureBracket,
+        "AgeBracket",
+        each
+            if [AgeYears] < 25 then "Under 25"
+            else if [AgeYears] <= 35 then "25–35"
+            else if [AgeYears] <= 50 then "36–50"
+            else "50+",
+        type text
+    ),
+
+    // Flag new hires (joined within 2 years of first snapshot date)
+    EarliestSnapshotDate = #date(2024,10,1), // change to your earliest snapshot
+    AddNewHireFlag = Table.AddColumn(
+        AddAgeBracket,
+        "NewHireFlag",
+        each if [ServiceStartDate] >= Date.AddYears(EarliestSnapshotDate, -2) then 1 else 0,
+        Int64.Type
+    )
+
+in
+    AddNewHireFlag
+
+2. DimOrg query (organisation mapping)
+
+let
+    Source = Excel.Workbook(File.Contents("C:\\Data\\OrgMAPPING.xlsx"), true),
+    Sheet  = Source{[Item="Sheet1",Kind="Sheet"]}[Data],
+    PromotedHeaders = Table.PromoteHeaders(Sheet, [PromoteAllScalars=true]),
+    Types = Table.TransformColumnTypes(
+        PromotedHeaders,
+        {
+            {"Org", type text},
+            {"Center", type text},
+            {"Org Code", type text},
+            {"CAM ID", type text}
+        }
+    )
+in
+    Types
+
+3. PersonnelActions query (fact table for losses and moves)
+
+let
+    Source = Excel.Workbook(File.Contents("C:\\Data\\KW DISA Personnel Actions new.xlsx"), true),
+    Sheet  = Source{[Item="Sheet1",Kind="Sheet"]}[Data],
+    PromotedHeaders = Table.PromoteHeaders(Sheet, [PromoteAllScalars=true]),
+
+    // Trim two‑character org codes from the long lines
+    AddFromOrgTrim = Table.AddColumn(
+        PromotedHeaders,
+        "FromOrgTrim",
+        each Text.Start(Text.Trim(Text.AfterDelimiter([FROM_POSITION_ORG_LINE6_14], "-", 0)), 2),
+        type text
+    ),
+    AddToOrgTrim = Table.AddColumn(
+        AddFromOrgTrim,
+        "ToOrgTrim",
+        each Text.Start(Text.Trim(Text.AfterDelimiter([TO_POSITION_ORG_LINE6_22], "-", 0)), 2),
+        type text
+    ),
+
+    // Set date types
+    ChangedTypes = Table.TransformColumnTypes(
+        AddToOrgTrim,
+        {
+            {"EFFECTIVE_DATE_4", type date},
+            {"DT_ARR_SVCG_CCPO", type date},
+            {"FIRST_NOA_CODE_5A", type text},
+            {"FIRST_NOA_DESC_5B", type text},
+            {"FIRST_ACTION_LA_CODE2_5E", type text},
+            {"FROM_OCC_CODE_9", type text},
+            {"TO_OCC_CODE_17", type text}
+            // add other columns here…
+        }
+    ),
+
+    // 1. Flag organisation change or external departure
+    AddFromToDifferent = Table.AddColumn(
+        ChangedTypes,
+        "FromToDifferent",
+        each
+            if
+                Text.Start([FROM_POSITION_ORG_LINE6_14], 2) <> Text.Start([TO_POSITION_ORG_LINE6_22], 2)
+                or List.Contains({"CAO", "T352"}, [FIRST_NOA_CODE_5A])
+                or Text.Start([FIRST_NOA_CODE_5A], 1) = "3"
+            then 1 else 0,
+        Int64.Type
+    ),
+
+    // 2. Flag job series change
+    AddSeriesChange = Table.AddColumn(
+        AddFromToDifferent,
+        "SeriesChange",
+        each
+            if
+                [FROM_OCC_CODE_9] <> [TO_OCC_CODE_17]
+                or List.Contains({"CAO", "T352"}, [FIRST_NOA_CODE_5A])
+                or Text.Start([FIRST_NOA_CODE_5A], 1) = "3"
+            then 1 else 0,
+        Int64.Type
+    ),
+
+    // 3. Classify movement type
+    AddMovementType = Table.AddColumn(
+        AddSeriesChange,
+        "MovementType",
+        each
+            if Text.Start([FIRST_NOA_CODE_5A], 1) = "3" or List.Contains({"CAO", "T352"}, [FIRST_NOA_CODE_5A]) then "External"
+            else if List.Contains({"501","570","702","721"}, [FIRST_NOA_CODE_5A]) then "Internal"
+            else "Other",
+        type text
+    ),
+
+    // 4. Derive departure reason
+    AddDepartureReason = Table.AddColumn(
+        AddMovementType,
+        "DepartureReason",
+        each
+            let lac2 = [FIRST_ACTION_LA_CODE2_5E]
+            in
+                if lac2 = "ADR" then "DoD‑DRP2"
+                else if lac2 = "RZM" then "DoD‑DRP1"
+                else if lac2 = "AZM" then "VERA/VSIP"
+                else [FIRST_NOA_DESC_5B],
+        type text
+    ),
+
+    // Optional numeric flag for external departures
+    AddExternalFlag = Table.AddColumn(
+        AddDepartureReason,
+        "ExternalFlag",
+        each if [MovementType] = "External" then 1 else 0,
+        Int64.Type
+    )
+
+in
+    AddExternalFlag
+
+4. DimDate query (date dimension)
+
+let
+    StartDate = #date(2020, 1, 1),
+    EndDate   = Date.EndOfYear(DateTime.Date(DateTime.LocalNow())),
+
+    Dates = List.Dates(StartDate, Duration.Days(EndDate - StartDate) + 1, #duration(1, 0, 0, 0)),
+    DateTable = Table.FromList(Dates, Splitter.SplitByNothing(), {"Date"}),
+    AddYear   = Table.AddColumn(DateTable, "Year", each Date.Year([Date]), Int64.Type),
+    AddMonthNum = Table.AddColumn(AddYear, "MonthNumber", each Date.Month([Date]), Int64.Type),
+    AddMonthName = Table.AddColumn(AddMonthNum, "MonthName", each Date.ToText([Date], "MMM"), type text),
+    AddQuarter = Table.AddColumn(AddMonthName, "Quarter", each Date.QuarterOfYear([Date]), Int64.Type)
+in
+    AddQuarter
+
+
+⸻
+
+✅ DAX Measures
+
+Once the data model is loaded (with relationships between DimOrg, Snapshots, PersonnelActions, and DimDate), define these measures in your model. They are designed to work with the “Earlier Snapshot” and “Later Snapshot” slicers bound to Snapshots[SnapshotDate].
+
+// Selected dates from slicers
+SelectedStartDate = MIN ( Snapshots[SnapshotDate] )
+SelectedEndDate   = MAX ( Snapshots[SnapshotDate] )
+
+// On‑hand headcount at start and end (excluding students/interns)
+OnHand_Start =
+CALCULATE (
+    DISTINCTCOUNT ( Snapshots[DoD ID (EDIPI)] ),
+    Snapshots[SnapshotDate] = [SelectedStartDate],
+    Snapshots[StudentIntern] = 0
+)
+
+OnHand_End =
+CALCULATE (
+    DISTINCTCOUNT ( Snapshots[DoD ID (EDIPI)] ),
+    Snapshots[SnapshotDate] = [SelectedEndDate],
+    Snapshots[StudentIntern] = 0
+)
+
+// Average headcount used as denominator for attrition
+AverageOnHand = DIVIDE ( [OnHand_Start] + [OnHand_End], 2 )
+
+// Losses between selected dates (external departures only)
+Losses =
+CALCULATE (
+    DISTINCTCOUNT ( PersonnelActions[NAME_PERS_1] ),
+    PersonnelActions[MovementType] = "External",
+    PersonnelActions[EFFECTIVE_DATE_4] > [SelectedStartDate],
+    PersonnelActions[EFFECTIVE_DATE_4] <= [SelectedEndDate]
+)
+
+// Attrition rate (as a percentage)
+Attrition % =
+DIVIDE ( [Losses], [AverageOnHand], 0 ) * 100
+
+// Non‑voluntary attrition (NOA codes 330, 355, 357, 385)
+NonVoluntaryLosses =
+CALCULATE (
+    DISTINCTCOUNT ( PersonnelActions[NAME_PERS_1] ),
+    PersonnelActions[FIRST_NOA_CODE_5A] IN { "330", "355", "357", "385" },
+    PersonnelActions[EFFECTIVE_DATE_4] > [SelectedStartDate],
+    PersonnelActions[EFFECTIVE_DATE_4] <= [SelectedEndDate]
+)
+NonVoluntaryAttrition % =
+DIVIDE ( [NonVoluntaryLosses], [AverageOnHand], 0 ) * 100
+
+VoluntaryAttrition % = [Attrition %] - [NonVoluntaryAttrition %]
+
+// Internal and external attrition rates
+Internal Losses =
+CALCULATE (
+    DISTINCTCOUNT ( PersonnelActions[NAME_PERS_1] ),
+    PersonnelActions[MovementType] = "Internal",
+    PersonnelActions[EFFECTIVE_DATE_4] > [SelectedStartDate],
+    PersonnelActions[EFFECTIVE_DATE_4] <= [SelectedEndDate]
+)
+External Losses =
+CALCULATE (
+    DISTINCTCOUNT ( PersonnelActions[NAME_PERS_1] ),
+    PersonnelActions[MovementType] = "External",
+    PersonnelActions[EFFECTIVE_DATE_4] > [SelectedStartDate],
+    PersonnelActions[EFFECTIVE_DATE_4] <= [SelectedEndDate]
+)
+
+Internal Attrition % = DIVIDE ( [Internal Losses], [AverageOnHand], 0 ) * 100
+External Attrition % = DIVIDE ( [External Losses], [AverageOnHand], 0 ) * 100
+
+// Retained employees (present in both snapshots with same org/series)
+RetainedTable =
+SUMMARIZE (
+    INTERSECT (
+        VALUES ( Snapshots[DoD ID (EDIPI)] ),
+        VALUES ( Snapshots[DoD ID (EDIPI)] )
+    ),
+    "EDIPI", Snapshots[DoD ID (EDIPI)],
+    "StartOrg", CALCULATE ( SELECTEDVALUE ( Snapshots[OrgFirst2] ), Snapshots[SnapshotDate] = [SelectedStartDate] ),
+    "EndOrg",   CALCULATE ( SELECTEDVALUE ( Snapshots[OrgFirst2] ), Snapshots[SnapshotDate] = [SelectedEndDate] ),
+    "StartSeries", CALCULATE ( SELECTEDVALUE ( Snapshots[Occ Series Current] ), Snapshots[SnapshotDate] = [SelectedStartDate] ),
+    "EndSeries",   CALCULATE ( SELECTEDVALUE ( Snapshots[Occ Series Current] ), Snapshots[SnapshotDate] = [SelectedEndDate] )
+)
+
+RetainedEmployees =
+COUNTROWS ( FILTER ( RetainedTable, [StartOrg] = [EndOrg] ) )
+
+Retention Rate % =
+DIVIDE ( [RetainedEmployees], [OnHand_Start], 0 ) * 100
+
+// New‑hire attrition
+NewHire OnHand Start =
+CALCULATE (
+    DISTINCTCOUNT ( Snapshots[DoD ID (EDIPI)] ),
+    Snapshots[SnapshotDate] = [SelectedStartDate],
+    Snapshots[StudentIntern] = 0,
+    Snapshots[NewHireFlag] = 1
+)
+NewHire OnHand End =
+CALCULATE (
+    DISTINCTCOUNT ( Snapshots[DoD ID (EDIPI)] ),
+    Snapshots[SnapshotDate] = [SelectedEndDate],
+    Snapshots[StudentIntern] = 0,
+    Snapshots[NewHireFlag] = 1
+)
+NewHire Avg OnHand = DIVIDE ( [NewHire OnHand Start] + [NewHire OnHand End], 2 )
+
+NewHire Losses =
+CALCULATE (
+    DISTINCTCOUNT ( PersonnelActions[NAME_PERS_1] ),
+    PersonnelActions[MovementType] = "External",
+    PersonnelActions[EFFECTIVE_DATE_4] > [SelectedStartDate],
+    PersonnelActions[EFFECTIVE_DATE_4] <= [SelectedEndDate],
+    RELATED ( Snapshots[NewHireFlag] ) = 1
+)
+NewHire Attrition % =
+DIVIDE ( [NewHire Losses], [NewHire Avg OnHand], 0 ) * 100
+
+// Average and median tenure
+Average Tenure = AVERAGE ( Snapshots[TenureYears] )
+Median Tenure =
+MEDIANX (
+    VALUES ( Snapshots[DoD ID (EDIPI)] ),
+    Snapshots[TenureYears]
+)
+Formatted Average Tenure =
+VAR AvgYears      = [Average Tenure]
+VAR Years         = INT ( AvgYears )
+VAR RemainingMonths = ROUND ( ( AvgYears - Years ) * 12, 0 )
+RETURN
+    IF (
+        RemainingMonths = 0,
+        FORMAT ( Years, "0" ) & " years",
+        FORMAT ( Years, "0" ) & " years and " & FORMAT ( RemainingMonths, "0" ) & " months"
+    )
+
+These measures rely on the definitions of attrition and retention—attrition is the number of leavers divided by the average number of employees ￼, while retention rate is the complement of attrition ￼. Adjust column names to match your actual dataset, and the model will support dynamic comparisons between any two snapshot dates selected via slicers.
