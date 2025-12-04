@@ -1,3 +1,24 @@
+#"Added Snapshot Date" =
+    Table.AddColumn(
+        #"Filtered Hidden Files1",
+        "Snapshot Date",
+        each
+            let
+                name     = [Name],
+                baseName = Text.BeforeDelimiter( name, "." ),   // strip extension
+                // expected suffix: "dd mm yy", e.g. "02 12 25"
+                datePart = Text.Trim( Text.End( baseName, 8 ) ),
+                parts    = Text.Split( datePart, " " ),
+                d       = Number.FromText( parts{0} ),
+                m       = Number.FromText( parts{1} ),
+                yShort  = Number.FromText( parts{2} ),
+                y       = if yShort < 50 then 2000 + yShort else 1900 + yShort
+            in
+                #date( y, m, d ),
+        type date
+    )
+
+
 Below is what you asked for:
 	•	One M replacement for the Employees partition (adds Snapshot Date correctly).
 	•	All the new calculated columns and measures for:
